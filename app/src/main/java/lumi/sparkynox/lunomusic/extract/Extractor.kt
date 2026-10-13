@@ -4,8 +4,8 @@ import android.util.Log
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.search.SearchInfo
-import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeStreamLinkHandlerFactory
+import org.schabi.newpipe.extractor.services.youtube.search.filter.YoutubeFilters
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -29,7 +29,8 @@ object Extractor {
 
     fun search(query: String): List<Track> {
         val yt = ServiceList.YouTube
-        val q = yt.searchQHFactory.fromQuery(query, listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS), "")
+        val songs = yt.searchQHFactory.getFilterItem(YoutubeFilters.ID_CF_MAIN_YOUTUBE_MUSIC_SONGS)
+        val q = yt.searchQHFactory.fromQuery(query, listOf(songs), emptyList())
         return SearchInfo.getInfo(yt, q).relatedItems
             .filterIsInstance<StreamInfoItem>()
             .mapNotNull { item ->
