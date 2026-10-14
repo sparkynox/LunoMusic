@@ -67,6 +67,57 @@ object Feed {
         }
     }
 
+    fun suggestions(q: String): List<String> {
+        val root = InnerTube.suggestions(q)
+        return root.arr("contents").objs().firstOrNull().obj("searchSuggestionsSectionRenderer").arr("contents").objs()
+            .mapNotNull { c ->
+                c.obj("searchSuggestionRenderer").obj("suggestion").runs()
+                    .joinToString("") { it.optString("text") }.ifBlank { null }
+            }
+    }
+
+    fun history(): List<Track> {
+        val root = InnerTube.browse("FEmusic_history")
+        val sections = root.obj("contents").obj("singleColumnBrowseResultsRenderer").arr("tabs").objs().firstOrNull()
+            .obj("tabRenderer").obj("content").obj("sectionListRenderer").arr("contents").objs()
+        return sections.flatMap { it.obj("musicShelfRenderer").arr("contents").objs() }
+            .mapNotNull { it.obj("musicResponsiveListItemRenderer")?.let { r -> listRow(r)?.toTrack() } }
+    }
+
+    fun playlists(): List<HomeItem> {
+        val root = InnerTube.browse("FEmusic_liked_playlists")
+        val grid = root.obj("contents").obj("singleColumnBrowseResultsRenderer").arr("tabs").objs().firstOrNull()
+            .obj("tabRenderer").obj("content").obj("sectionListRenderer").arr("contents").objs().firstOrNull()
+            .obj("gridRenderer")
+        return grid.arr("items").objs()
+            .mapNotNull { it.obj("musicTwoRowItemRenderer")?.let { r -> twoRow(r) } }
+            .filter { it.kind == Kind.PLAYLIST || it.kind == Kind.ALBUM }
+    }
+
+    // full playlist (also liked songs with id LM), follows continuations
+    fun playlistSongs(playlistId: String): List<Track> {
+        var root = InnerTube.browse("VL$playlistId")
+        val out = ArrayList<Track>()
+        var shelf = root.obj("contents").obj("twoColumnBrowseResultsRenderer").obj("secondaryContents")
+            .obj("sectionListRenderer").arr("contents").objs().firstOrNull().obj("musicPlaylistShelfRenderer")
+            ?: root.obj("contents").obj("singleColumnBrowseResultsRenderer").arr("tabs").objs().firstOrNull()
+                .obj("tabRenderer").obj("content").obj("sectionListRenderer").arr("contents").objs().firstOrNull()
+                .obj("musicPlaylistShelfRenderer")
+        var pages = 0
+        while (shelf != null && pages < 8) {
+            shelf.arr("contents").objs().mapNotNullTo(out) {
+                it.obj("musicResponsiveListItemRenderer")?.let { r -> listRow(r)?.toTrack() }
+            }
+            val cont = shelf.arr("continuations").objs().firstOrNull().obj("nextContinuationData").str("continuation") ?: break
+            root = InnerTube.browse(continuation = cont)
+            shelf = root.obj("continuationContents").obj("musicPlaylistShelfContinuation")
+            pages++
+        }
+        return out
+    }
+
+    private fun HomeItem.toTrack(): Track? = videoId?.let { Track(it, title, artist, thumb, 0L) }
+
     private fun section(shelf: JSONObject?): HomeSection? {
         if (shelf == null) return null
         val title = shelf.obj("header").obj("musicCarouselShelfBasicHeaderRenderer").obj("title").firstText() ?: return null

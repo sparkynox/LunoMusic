@@ -25,7 +25,15 @@ object Extractor {
     private const val YTDLP_FIRST = false
     private const val CACHE_MS = 5 * 60 * 60 * 1000L
 
-    private val cache = ConcurrentHashMap<String, Pair<String, Long>>()
+    private class Cached(val url: String, val at: Long, val src: Int)
+
+    private val cache = ConcurrentHashMap<String, Cached>()
+    private val avoid = ConcurrentHashMap<String, Int>()
+
+    // call when a url turned out dead, next resolve tries the other extractor first
+    fun invalidate(id: String) {
+        cache.remove(id)?.let { avoid[id] = it.src }
+    }
 
     fun search(query: String): List<Track> {
         val yt = ServiceList.YouTube
@@ -41,19 +49,20 @@ object Extractor {
     }
 
     fun resolve(id: String): String {
-        cache[id]?.let { (url, at) -> if (System.currentTimeMillis() - at < CACHE_MS) return url }
+        cache[id]?.let { if (System.currentTimeMillis() - it.at < CACHE_MS) return it.url }
 
-        val chain = listOf<(String) -> String?>({ viaPipe(it) }, { viaYtDlp(it) })
-            .let { if (YTDLP_FIRST) it.reversed() else it }
+        // 0 = pipe extractor, 1 = yt-dlp
+        var order = if (YTDLP_FIRST) listOf(1, 0) else listOf(0, 1)
+        avoid[id]?.let { bad -> order = order.filter { it != bad } + bad }
 
         var last: Throwable? = null
-        for (step in chain) {
+        for (src in order) {
             try {
-                val url = step(id) ?: continue
-                cache[id] = url to System.currentTimeMillis()
+                val url = (if (src == 0) viaPipe(id) else viaYtDlp(id)) ?: continue
+                cache[id] = Cached(url, System.currentTimeMillis(), src)
                 return url
             } catch (e: Throwable) {
-                Log.w("Extractor", "step failed for $id", e)
+                Log.w("Extractor", "source $src failed for $id", e)
                 last = e
             }
         }

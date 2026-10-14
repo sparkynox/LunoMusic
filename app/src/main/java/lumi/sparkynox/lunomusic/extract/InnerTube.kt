@@ -38,6 +38,9 @@ object InnerTube {
         return post("next", body)
     }
 
+    fun suggestions(input: String): JSONObject =
+        post("music/get_search_suggestions", JSONObject().put("input", input))
+
     private fun post(path: String, body: JSONObject): JSONObject {
         val client = JSONObject()
             .put("clientName", "WEB_REMIX")
