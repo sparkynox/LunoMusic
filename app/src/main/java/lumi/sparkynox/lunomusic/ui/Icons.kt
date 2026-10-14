@@ -49,3 +49,28 @@ fun SkipIcon(forward: Boolean, dp: Dp, tint: Color) {
         }
     }
 }
+
+@Composable
+fun GridIcon(dp: Dp, tint: Color) {
+    Canvas(Modifier.size(dp)) {
+        val w = size.width
+        val r = CornerRadius(w * 0.08f)
+        val s = Size(w * 0.34f, w * 0.34f)
+        drawRoundRect(tint, Offset(w * 0.12f, w * 0.12f), s, r)
+        drawRoundRect(tint, Offset(w * 0.54f, w * 0.12f), s, r)
+        drawRoundRect(tint, Offset(w * 0.12f, w * 0.54f), s, r)
+        drawRoundRect(tint, Offset(w * 0.54f, w * 0.54f), s, r)
+    }
+}
+
+@Composable
+fun RoundBtn(dp: Dp, color: Color, onClick: () -> Unit, content: @Composable () -> Unit) {
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = androidx.compose.foundation.shape.CircleShape,
+        color = color,
+        modifier = Modifier.size(dp)
+    ) {
+        androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) { content() }
+    }
+}

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +45,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -58,8 +61,10 @@ fun NowPlaying(vm: MusicVM) {
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
     var drag by remember { mutableStateOf<Float?>(null) }
-    var showQueue by remember { mutableStateOf(false) }
+    var panel by remember { mutableIntStateOf(0) } // 0 art, 1 queue, 2 lyrics
     val accent = MaterialTheme.colorScheme.primary
+    val lyricState = rememberLazyListState()
+    val cur = vm.lyrics.indexOfLast { it.ms <= pos + 250 }.coerceAtLeast(0)
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -69,6 +74,14 @@ fun NowPlaying(vm: MusicVM) {
             }
             delay(400)
         }
+    }
+
+    LaunchedEffect(panel, meta?.title) {
+        if (panel == 2) vm.loadLyrics()
+    }
+
+    LaunchedEffect(cur, panel, vm.lyrics.size) {
+        if (panel == 2 && vm.lyrics.isNotEmpty()) lyricState.animateScrollToItem((cur - 2).coerceAtLeast(0))
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -85,7 +98,7 @@ fun NowPlaying(vm: MusicVM) {
             )
         )
 
-        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 12.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { vm.showPlayer = false }) { Text("Close", color = Color.White) }
                 Spacer(Modifier.weight(1f))
@@ -94,8 +107,8 @@ fun NowPlaying(vm: MusicVM) {
                 Spacer(Modifier.size(64.dp))
             }
 
-            if (showQueue) {
-                LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            when (panel) {
+                1 -> LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     itemsIndexed(vm.queue) { i, item ->
                         val current = i == vm.queueIndex
                         Row(
@@ -106,7 +119,8 @@ fun NowPlaying(vm: MusicVM) {
                             AsyncImage(
                                 model = item.mediaMetadata.artworkUri,
                                 contentDescription = null,
-                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(10.dp))
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -124,18 +138,36 @@ fun NowPlaying(vm: MusicVM) {
                         }
                     }
                 }
-            } else {
-                Spacer(Modifier.weight(1f))
-                AsyncImage(
-                    model = meta?.artworkUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(24.dp))
-                )
-                Spacer(Modifier.weight(1f))
+
+                2 -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    when {
+                        vm.lyricsState == "loading" -> Text("Loading lyrics...", color = Color.White.copy(alpha = 0.7f))
+                        vm.lyricsState == "none" -> Text("No synced lyrics found for this one", color = Color.White.copy(alpha = 0.7f))
+                        else -> LazyColumn(Modifier.fillMaxSize(), state = lyricState) {
+                            itemsIndexed(vm.lyrics) { i, line ->
+                                Text(
+                                    line.text.ifBlank { "..." },
+                                    color = if (i == cur) Color.White else Color.White.copy(alpha = 0.4f),
+                                    fontWeight = if (i == cur) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 22.sp,
+                                    modifier = Modifier.fillMaxWidth().clickable { vm.seekTo(line.ms) }.padding(vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                else -> Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                    AsyncImage(
+                        model = meta?.artworkUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.aspectRatio(1f, matchHeightConstraintsFirst = true).clip(RoundedCornerShape(24.dp))
+                    )
+                }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
                 meta?.title?.toString() ?: "",
                 color = Color.White, fontWeight = FontWeight.Bold,
@@ -173,28 +205,30 @@ fun NowPlaying(vm: MusicVM) {
             }
 
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = vm::previous, modifier = Modifier.size(64.dp)) {
-                    SkipIcon(forward = false, dp = 36.dp, tint = Color.White)
+                    SkipIcon(forward = false, dp = 34.dp, tint = Color.White)
                 }
-                Surface(onClick = vm::toggle, shape = CircleShape, color = Color.White, modifier = Modifier.size(72.dp)) {
+                Surface(onClick = vm::toggle, shape = CircleShape, color = Color.White, modifier = Modifier.size(68.dp)) {
                     Box(contentAlignment = Alignment.Center) {
-                        PlayPauseIcon(vm.playing, 36.dp, Color.Black)
+                        PlayPauseIcon(vm.playing, 34.dp, Color.Black)
                     }
                 }
                 IconButton(onClick = vm::next, modifier = Modifier.size(64.dp)) {
-                    SkipIcon(forward = true, dp = 36.dp, tint = Color.White)
+                    SkipIcon(forward = true, dp = 34.dp, tint = Color.White)
                 }
             }
 
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Pill("Queue", showQueue) { showQueue = !showQueue }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("Queue", panel == 1) { panel = if (panel == 1) 0 else 1 }
+                Pill("Lyrics", panel == 2) { panel = if (panel == 2) 0 else 2 }
+                Pill(if (vm.sleepMinutes > 0) "Sleep ${vm.sleepMinutes}m" else "Sleep", vm.sleepMinutes > 0) { vm.cycleSleep() }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("Endless", vm.endless) { vm.endless = !vm.endless }
                 Pill("Shuffle", vm.shuffle) { vm.toggleShuffle() }
                 Pill(
                     when (vm.repeat) {

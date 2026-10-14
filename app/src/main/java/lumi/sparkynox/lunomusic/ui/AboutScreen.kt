@@ -27,6 +27,7 @@ private val credits = listOf(
     Credit("EchoMusic", "Feature and UI inspiration, and the reference for how a YT Music login and home feed behave", "https://github.com/EchoMusicApp/Echo-Music"),
     Credit("ArchiveTune", "UI inspiration, mainly the player layout", "https://github.com/rukamori/ArchiveTune"),
     Credit("BravePipe / NewPipe extractor", "Search and stream extraction", "https://github.com/bravepipeproject"),
+    Credit("LRCLIB", "Synced lyrics", "https://lrclib.net"),
     Credit("yt-dlp", "Fallback stream extraction", "https://github.com/yt-dlp/yt-dlp"),
     Credit("Chaquopy", "Python runtime on Android", "https://chaquo.com/chaquopy/"),
     Credit("AndroidX Media3, Jetpack Compose", "Playback and UI", "https://developer.android.com/"),
