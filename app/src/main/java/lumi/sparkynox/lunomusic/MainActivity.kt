@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.viewmodel.compose.viewModel
+import lumi.sparkynox.lunomusic.ui.AboutScreen
 import lumi.sparkynox.lunomusic.ui.LoginScreen
 import lumi.sparkynox.lunomusic.ui.LunoTheme
 import lumi.sparkynox.lunomusic.ui.Screen
@@ -23,10 +24,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             LunoTheme {
                 val vm = viewModel<MusicVM>()
-                if (vm.showLogin) {
-                    LoginScreen(onDone = vm::onLoginDone, onBack = { vm.showLogin = false })
-                } else {
-                    Screen(vm)
+                when {
+                    vm.showLogin -> LoginScreen(onDone = vm::onLoginDone, onBack = { vm.showLogin = false })
+                    vm.showAbout -> AboutScreen(onBack = { vm.showAbout = false })
+                    else -> Screen(vm)
                 }
             }
         }
