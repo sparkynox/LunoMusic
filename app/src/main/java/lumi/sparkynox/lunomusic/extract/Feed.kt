@@ -13,6 +13,18 @@ data class HomeItem(
     val thumb: String?,
     val videoId: String?,
     val playlistId: String?,
+    val browseId: String? = null,
+    val artistId: String? = null,
+)
+
+fun HomeItem.asTrack(): Track? = videoId?.let { Track(it, title, artist, thumb, 0L, artistId) }
+
+class ArtistData(
+    val name: String,
+    val thumb: String?,
+    val description: String?,
+    val songs: List<Track>,
+    val sections: List<HomeSection>,
 )
 
 data class HomeSection(val title: String, val items: List<HomeItem>)
@@ -63,6 +75,7 @@ object Feed {
                 artist = v.obj("shortBylineText").firstText() ?: "",
                 thumb = v.obj("thumbnail").arr("thumbnails").objs().lastOrNull().str("url"),
                 seconds = seconds(v.obj("lengthText").firstText()),
+                artistId = artistId(v.obj("longBylineText").runs()),
             )
         }
     }
@@ -116,7 +129,26 @@ object Feed {
         return out
     }
 
-    private fun HomeItem.toTrack(): Track? = videoId?.let { Track(it, title, artist, thumb, 0L) }
+    private fun HomeItem.toTrack(): Track? = videoId?.let { Track(it, title, artist, thumb, 0L, artistId) }
+
+    private fun artistId(runs: List<JSONObject>): String? = runs.firstNotNullOfOrNull { r ->
+        r.obj("navigationEndpoint").obj("browseEndpoint").str("browseId")?.takeIf { it.startsWith("UC") }
+    }
+
+    fun artist(browseId: String): ArtistData {
+        val root = InnerTube.browse(browseId)
+        val h = root.obj("header")
+        val header = h.obj("musicImmersiveHeaderRenderer") ?: h.obj("musicVisualHeaderRenderer")
+        val name = header.obj("title").firstText() ?: ""
+        val thumb = (header.obj("thumbnail") ?: header.obj("foregroundThumbnail"))
+            .obj("musicThumbnailRenderer").obj("thumbnail").arr("thumbnails").objs().lastOrNull().str("url")
+        val contents = root.obj("contents").obj("singleColumnBrowseResultsRenderer").arr("tabs").objs().firstOrNull()
+            .obj("tabRenderer").obj("content").obj("sectionListRenderer").arr("contents").objs()
+        val songs = contents.flatMap { it.obj("musicShelfRenderer").arr("contents").objs() }
+            .mapNotNull { it.obj("musicResponsiveListItemRenderer")?.let { r -> listRow(r)?.toTrack() } }
+        val sections = contents.mapNotNull { section(it.obj("musicCarouselShelfRenderer")) }
+        return ArtistData(name, thumb ?: songs.firstOrNull()?.thumb, header.obj("description").firstText(), songs, sections)
+    }
 
     private fun section(shelf: JSONObject?): HomeSection? {
         if (shelf == null) return null
@@ -143,19 +175,20 @@ object Feed {
             .obj("musicPlayButtonRenderer").obj("playNavigationEndpoint").obj("watchPlaylistEndpoint").str("playlistId")
 
         val sub = parts.joinToString(" • ")
+        val aid = artistId(runs)
         val artist = runs
             .filter { it.obj("navigationEndpoint").obj("browseEndpoint").str("browseId")?.startsWith("UC") == true }
             .joinToString(", ") { it.optString("text") }
             .ifEmpty { parts.firstOrNull() ?: "" }
 
         return when {
-            watch != null -> HomeItem(Kind.SONG, title, sub, artist, thumb, watch.str("videoId") ?: return null, null)
-            mix != null -> HomeItem(Kind.PLAYLIST, title, sub, artist, thumb, null, mix.str("playlistId") ?: return null)
-            pageType == "MUSIC_PAGE_TYPE_ARTIST" -> HomeItem(Kind.ARTIST, title, sub, artist, thumb, null, null)
+            watch != null -> HomeItem(Kind.SONG, title, sub, artist, thumb, watch.str("videoId") ?: return null, null, null, aid)
+            mix != null -> HomeItem(Kind.PLAYLIST, title, sub, artist, thumb, null, mix.str("playlistId") ?: return null, null, aid)
+            pageType == "MUSIC_PAGE_TYPE_ARTIST" -> HomeItem(Kind.ARTIST, title, sub, artist, thumb, null, null, browse.str("browseId"), browse.str("browseId"))
             pageType == "MUSIC_PAGE_TYPE_ALBUM" || pageType == "MUSIC_PAGE_TYPE_AUDIOBOOK" ->
-                HomeItem(Kind.ALBUM, title, sub, artist, thumb, null, overlayPlaylist ?: return null)
+                HomeItem(Kind.ALBUM, title, sub, artist, thumb, null, overlayPlaylist ?: return null, browse.str("browseId"), aid)
             pageType == "MUSIC_PAGE_TYPE_PLAYLIST" ->
-                HomeItem(Kind.PLAYLIST, title, sub, artist, thumb, null, overlayPlaylist ?: browse.str("browseId")?.removePrefix("VL") ?: return null)
+                HomeItem(Kind.PLAYLIST, title, sub, artist, thumb, null, overlayPlaylist ?: browse.str("browseId")?.removePrefix("VL") ?: return null, browse.str("browseId"), aid)
             else -> null
         }
     }
@@ -169,7 +202,10 @@ object Feed {
             ?: r.obj("overlay").obj("musicItemThumbnailOverlayRenderer").obj("content").obj("musicPlayButtonRenderer")
                 .obj("playNavigationEndpoint").obj("watchEndpoint").str("videoId")
             ?: return null
-        return HomeItem(Kind.SONG, title, parts.joinToString(" • "), parts.firstOrNull() ?: "", thumb(r.obj("thumbnail")), videoId, null)
+        return HomeItem(
+            Kind.SONG, title, parts.joinToString(" • "), parts.firstOrNull() ?: "", thumb(r.obj("thumbnail")),
+            videoId, null, null, artistId(cols.getOrNull(1).runs())
+        )
     }
 
     private fun thumb(renderer: JSONObject?) = renderer.obj("musicThumbnailRenderer").obj("thumbnail")

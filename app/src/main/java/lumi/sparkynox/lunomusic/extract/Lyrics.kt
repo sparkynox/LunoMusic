@@ -1,5 +1,6 @@
 package lumi.sparkynox.lunomusic.extract
 
+import lumi.sparkynox.lunomusic.util.AppLog
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +28,10 @@ object Lyrics {
             .addQueryParameter("artist_name", a)
             .apply { if (seconds > 0) addQueryParameter("duration", seconds.toString()) }
             .build()
-        body(get)?.let { parse(JSONObject(it).optString("syncedLyrics")) }?.takeIf { it.isNotEmpty() }?.let { return it }
+        body(get)?.let { parse(JSONObject(it).optString("syncedLyrics")) }?.takeIf { it.isNotEmpty() }?.let {
+            AppLog.i("Lyrics", "'$t' found via get, ${it.size} lines")
+            return it
+        }
 
         val search = HttpUrl.Builder().scheme("https").host("lrclib.net").addPathSegments("api/search")
             .addQueryParameter("q", "$t $a")
@@ -35,8 +39,12 @@ object Lyrics {
         val arr = body(search)?.let { JSONArray(it) } ?: return emptyList()
         for (i in 0 until arr.length()) {
             val lines = parse(arr.optJSONObject(i)?.optString("syncedLyrics"))
-            if (lines.isNotEmpty()) return lines
+            if (lines.isNotEmpty()) {
+                AppLog.i("Lyrics", "'$t' found via search (#$i), ${lines.size} lines")
+                return lines
+            }
         }
+        AppLog.w("Lyrics", "'$t' by '$a' ($seconds s): nothing synced found")
         return emptyList()
     }
 

@@ -1,6 +1,8 @@
 package lumi.sparkynox.lunomusic.extract
 
+import android.os.SystemClock
 import lumi.sparkynox.lunomusic.auth.Session
+import lumi.sparkynox.lunomusic.util.AppLog
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -72,10 +74,28 @@ object InnerTube {
             }
         }
 
-        http.newCall(rb.build()).execute().use { r ->
-            if (!r.isSuccessful) throw IOException("youtube music ${r.code}")
-            return JSONObject(r.body?.string() ?: throw IOException("empty response"))
+        val t0 = SystemClock.elapsedRealtime()
+        try {
+            http.newCall(rb.build()).execute().use { r ->
+                val text = r.body?.string() ?: ""
+                val ms = SystemClock.elapsedRealtime() - t0
+                if (!r.isSuccessful) {
+                    AppLog.e("InnerTube", "$path -> HTTP ${r.code} in ${ms}ms (auth=${Session.loggedIn}) body=${text.take(300)}")
+                    throw IOException("youtube music ${r.code}")
+                }
+                AppLog.d("InnerTube", "$path -> ${r.code} in ${ms}ms, ${text.length} bytes (auth=${Session.loggedIn})")
+                return JSONObject(text)
+            }
+        } catch (e: IOException) {
+            AppLog.e("InnerTube", "$path failed after ${SystemClock.elapsedRealtime() - t0}ms: ${e.message}")
+            throw e
         }
+    }
+
+    // like / unlike, needs login
+    fun like(videoId: String, remove: Boolean) {
+        val body = JSONObject().put("target", JSONObject().put("videoId", videoId))
+        post(if (remove) "like/removelike" else "like/like", body)
     }
 
     private fun sha1(s: String) = MessageDigest.getInstance("SHA-1")
