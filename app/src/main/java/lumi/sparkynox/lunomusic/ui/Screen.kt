@@ -1,6 +1,5 @@
 package lumi.sparkynox.lunomusic.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,16 +16,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,12 +55,12 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaMetadata
 import coil.compose.AsyncImage
 import lumi.sparkynox.lunomusic.MusicVM
-import lumi.sparkynox.lunomusic.extract.HomeItem
+import lumi.sparkynox.lunomusic.SettingsPage
+import lumi.sparkynox.lunomusic.StatsPage
 import lumi.sparkynox.lunomusic.extract.HomeSection
 import lumi.sparkynox.lunomusic.extract.Kind
-import lumi.sparkynox.lunomusic.extract.Track
-
-private val listPad = PaddingValues(bottom = 190.dp)
+import lumi.sparkynox.lunomusic.extract.SearchFilter
+import lumi.sparkynox.lunomusic.extract.asTrack
 
 @Composable
 fun Screen(vm: MusicVM) {
@@ -76,6 +74,8 @@ fun Screen(vm: MusicVM) {
             1 -> SearchTab(vm)
             else -> LibraryTab(vm)
         }
+
+        PageHost(vm)
 
         Column(
             Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -91,11 +91,15 @@ fun Screen(vm: MusicVM) {
 
 @Composable
 private fun NavPill(vm: MusicVM) {
+    fun go(i: Int) {
+        vm.pages = emptyList()
+        vm.tab = i
+    }
     Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            NavItem(vm.tab == 0, "Home", { vm.tab = 0 }) { Icon(Icons.Default.Home, null, tint = it) }
-            NavItem(vm.tab == 1, "Search", { vm.tab = 1 }) { Icon(Icons.Default.Search, null, tint = it) }
-            NavItem(vm.tab == 2, "Library", { vm.tab = 2 }) { GridIcon(22.dp, it) }
+            NavItem(vm.tab == 0, "Home", { go(0) }) { Icon(Icons.Default.Home, null, tint = it) }
+            NavItem(vm.tab == 1, "Search", { go(1) }) { Icon(Icons.Default.Search, null, tint = it) }
+            NavItem(vm.tab == 2, "Library", { go(2) }) { GridIcon(22.dp, it) }
         }
     }
 }
@@ -150,6 +154,7 @@ private fun MiniPlayer(vm: MusicVM, meta: MediaMetadata) {
 @Composable
 private fun HomeTab(vm: MusicVM) {
     var menu by remember { mutableStateOf(false) }
+    val btn = MaterialTheme.colorScheme.surfaceVariant
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPad) {
         item {
@@ -159,13 +164,14 @@ private fun HomeTab(vm: MusicVM) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Luno", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                RoundBtn(40.dp, MaterialTheme.colorScheme.surfaceVariant, { vm.showAbout = true }) {
-                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                RoundBtn(40.dp, btn, { vm.push(StatsPage) }) { BarsIcon(20.dp, MaterialTheme.colorScheme.onSurface) }
+                RoundBtn(40.dp, btn, { vm.push(SettingsPage) }) {
+                    Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
                 }
                 Box {
                     RoundBtn(
                         40.dp,
-                        if (vm.loggedIn) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        if (vm.loggedIn) MaterialTheme.colorScheme.secondaryContainer else btn,
                         { if (vm.loggedIn) menu = true else vm.showLogin = true }
                     ) {
                         Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
@@ -205,11 +211,7 @@ private fun HomeTab(vm: MusicVM) {
                             label = { Text(c.title) },
                             shape = CircleShape,
                             border = null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            colors = chipColors()
                         )
                     }
                 }
@@ -237,26 +239,11 @@ private fun HomeTab(vm: MusicVM) {
 }
 
 @Composable
-private fun SectionHeader(title: String, action: (@Composable () -> Unit)? = null) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 20.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        action?.invoke()
-    }
-}
-
-@Composable
-private fun CarouselSection(vm: MusicVM, sec: HomeSection) {
-    SectionHeader(sec.title)
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(sec.items) { item -> ItemCard(item) { vm.playItem(sec, item) } }
-    }
-}
+private fun chipColors() = FilterChipDefaults.filterChipColors(
+    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+)
 
 // columns of four songs you swipe through
 @Composable
@@ -292,20 +279,6 @@ private fun QuickPicks(vm: MusicVM, sec: HomeSection) {
 }
 
 @Composable
-private fun ItemCard(item: HomeItem, onClick: () -> Unit) {
-    Column(Modifier.width(150.dp).clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AsyncImage(
-            model = item.thumb,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(150.dp).clip(if (item.kind == Kind.ARTIST) CircleShape else RoundedCornerShape(16.dp))
-        )
-        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
 private fun SearchTab(vm: MusicVM) {
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -317,8 +290,23 @@ private fun SearchTab(vm: MusicVM) {
             placeholder = { Text("Search YouTube Music") },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { vm.search() }),
-            modifier = Modifier.fillMaxWidth().padding(16.dp)
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
         )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(SearchFilter.entries.toList()) { f ->
+                FilterChip(
+                    selected = vm.filter == f,
+                    onClick = { vm.selectFilter(f) },
+                    label = { Text(f.label) },
+                    shape = CircleShape,
+                    border = null,
+                    colors = chipColors()
+                )
+            }
+        }
         if (vm.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         vm.error?.let {
             Text(it, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(16.dp))
@@ -339,63 +327,53 @@ private fun SearchTab(vm: MusicVM) {
             }
         } else {
             LazyColumn(contentPadding = listPad) {
-                itemsIndexed(vm.results) { i, t -> TrackRow(t) { vm.play(i) } }
+                items(vm.results) { item ->
+                    val track = if (item.kind == Kind.SONG) item.asTrack() else null
+                    if (track != null) TrackRow(vm, track) { vm.openResult(item) }
+                    else ItemRow(item) { vm.openResult(item) }
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun TrackRow(t: Track, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        AsyncImage(
-            model = t.thumb,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))
-        )
-        Column(Modifier.weight(1f)) {
-            Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (t.seconds > 0) Text("%d:%02d".format(t.seconds / 60, t.seconds % 60), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun LibraryTab(vm: MusicVM) {
-    if (!vm.loggedIn) {
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Library", style = MaterialTheme.typography.headlineMedium)
-            Text("Log in to see your liked songs, history and playlists", modifier = Modifier.padding(vertical = 12.dp))
-            Button(onClick = { vm.showLogin = true }) { Text("Log in") }
-        }
-        return
-    }
-
-    if (vm.libTitle != null) {
-        LibraryList(vm)
-        return
-    }
-
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listPad) {
         item { Text("Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp)) }
-        item {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LibTile("Liked songs", "Your likes", Color(0xFF2E2224), Modifier.weight(1f)) { vm.openLiked() }
-                LibTile("History", "Recently played", MaterialTheme.colorScheme.surfaceVariant, Modifier.weight(1f)) { vm.openHistory() }
+
+        if (!vm.loggedIn) {
+            item {
+                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Log in to see your liked songs, history and playlists")
+                        Button(onClick = { vm.showLogin = true }) { Text("Log in") }
+                    }
+                }
             }
         }
+
+        item {
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (vm.loggedIn) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LibTile("Liked songs", "Your likes", Color(0xFF2E2224), Modifier.weight(1f)) { vm.openLiked() }
+                        LibTile("History", "Recently played", MaterialTheme.colorScheme.surfaceVariant, Modifier.weight(1f)) { vm.openHistory() }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LibTile("Downloads", "Offline songs", MaterialTheme.colorScheme.surfaceVariant, Modifier.weight(1f)) { vm.openDownloads() }
+                    LibTile("My top 50", "Most played, all time", MaterialTheme.colorScheme.surfaceVariant, Modifier.weight(1f)) { vm.openTop50() }
+                }
+            }
+        }
+
         if (vm.libLoading) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp)) }
         if (vm.libPlaylists.isNotEmpty()) {
             item { SectionHeader("Your playlists") }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(vm.libPlaylists) { p -> ItemCard(p) { vm.openPlaylist(p) } }
+                    items(vm.libPlaylists) { p -> ItemCard(p) { vm.openItem(p) } }
                 }
             }
         }
@@ -408,22 +386,6 @@ private fun LibTile(title: String, sub: String, color: Color, modifier: Modifier
         Column(Modifier.padding(16.dp).height(64.dp), verticalArrangement = Arrangement.Bottom) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun LibraryList(vm: MusicVM) {
-    BackHandler { vm.closeList() }
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = vm::closeList) { Text("Back") }
-            Text(vm.libTitle ?: "", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (vm.libTracks.isNotEmpty()) TextButton(onClick = { vm.playLib(0) }) { Text("Play all") }
-        }
-        if (vm.libLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(contentPadding = listPad) {
-            itemsIndexed(vm.libTracks) { i, t -> TrackRow(t) { vm.playLib(i) } }
         }
     }
 }

@@ -74,3 +74,22 @@ fun RoundBtn(dp: Dp, color: Color, onClick: () -> Unit, content: @Composable () 
         androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) { content() }
     }
 }
+
+@Composable
+fun MoreIcon(dp: Dp, tint: Color) {
+    Canvas(Modifier.size(dp)) {
+        val w = size.width
+        for (i in 0..2) drawCircle(tint, w * 0.075f, Offset(w * 0.5f, w * (0.25f + i * 0.25f)))
+    }
+}
+
+@Composable
+fun BarsIcon(dp: Dp, tint: Color) {
+    Canvas(Modifier.size(dp)) {
+        val w = size.width
+        val r = CornerRadius(w * 0.06f)
+        drawRoundRect(tint, Offset(w * 0.15f, w * 0.5f), Size(w * 0.18f, w * 0.35f), r)
+        drawRoundRect(tint, Offset(w * 0.41f, w * 0.15f), Size(w * 0.18f, w * 0.7f), r)
+        drawRoundRect(tint, Offset(w * 0.67f, w * 0.35f), Size(w * 0.18f, w * 0.5f), r)
+    }
+}

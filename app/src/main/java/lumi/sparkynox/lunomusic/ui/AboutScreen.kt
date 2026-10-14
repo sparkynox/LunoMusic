@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 private data class Credit(val name: String, val what: String, val url: String)
 
 private val credits = listOf(
-    Credit("EchoMusic", "Feature and UI inspiration, and the reference for how a YT Music login and home feed behave", "https://github.com/EchoMusicApp/Echo-Music"),
+    Credit("EchoMusic", "Feature and UI inspiration, reference for the YT Music login and home feed", "https://github.com/EchoMusicApp/Echo-Music"),
     Credit("ArchiveTune", "UI inspiration, mainly the player layout", "https://github.com/rukamori/ArchiveTune"),
     Credit("BravePipe / NewPipe extractor", "Search and stream extraction", "https://github.com/bravepipeproject"),
     Credit("LRCLIB", "Synced lyrics", "https://lrclib.net"),
@@ -56,12 +56,12 @@ fun AboutScreen(onBack: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "LunoMusic is written from scratch. No source code from EchoMusic or ArchiveTune is used, they are credited for ideas and design inspiration only.",
+            "The UI and features are inspired by EchoMusic and ArchiveTune (both GPL-3.0), thank you to their developers.",
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Not affiliated with YouTube or Google. Source is MIT, the built APK is GPL-3.0 because of the extractor it links against.",
+            "Not affiliated with YouTube or Google. LunoMusic is free software under the GPL-3.0 license.",
             style = MaterialTheme.typography.bodySmall
         )
     }
