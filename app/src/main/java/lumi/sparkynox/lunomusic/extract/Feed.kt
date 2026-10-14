@@ -17,12 +17,19 @@ data class HomeItem(
 
 data class HomeSection(val title: String, val items: List<HomeItem>)
 
-data class HomePage(val sections: List<HomeSection>, val continuation: String?)
+data class Chip(val title: String, val browseId: String, val params: String?)
+
+data class HomePage(val sections: List<HomeSection>, val continuation: String?, val chips: List<Chip> = emptyList())
 
 object Feed {
-    fun home(continuation: String? = null): HomePage {
-        val root = if (continuation != null) InnerTube.browse(continuation = continuation)
-        else InnerTube.browse("FEmusic_home")
+    private val seps = setOf(",", "&", "•", "·", "-", "and")
+
+    fun home(continuation: String? = null, chip: Chip? = null): HomePage {
+        val root = when {
+            continuation != null -> InnerTube.browse(continuation = continuation)
+            chip != null -> InnerTube.browse(chip.browseId, params = chip.params)
+            else -> InnerTube.browse("FEmusic_home")
+        }
 
         val list = if (continuation != null) {
             root.obj("continuationContents").obj("sectionListContinuation")
@@ -33,7 +40,12 @@ object Feed {
 
         val sections = list.arr("contents").objs().mapNotNull { section(it.obj("musicCarouselShelfRenderer")) }
         val next = list.arr("continuations").objs().firstOrNull().obj("nextContinuationData").str("continuation")
-        return HomePage(sections, next)
+        val chips = list.obj("header").obj("chipCloudRenderer").arr("chips").objs().mapNotNull { c ->
+            val r = c.obj("chipCloudChipRenderer")
+            val be = r.obj("navigationEndpoint").obj("browseEndpoint")
+            Chip(r.obj("text").firstText() ?: return@mapNotNull null, be.str("browseId") ?: return@mapNotNull null, be.str("params"))
+        }
+        return HomePage(sections, next, chips)
     }
 
     fun queue(playlistId: String?, videoId: String? = null): List<Track> {
@@ -67,7 +79,8 @@ object Feed {
 
     private fun twoRow(r: JSONObject): HomeItem? {
         val title = r.obj("title").firstText() ?: return null
-        val parts = parts(r.obj("subtitle"))
+        val runs = r.obj("subtitle").runs()
+        val parts = parts(runs)
         val thumb = thumb(r.obj("thumbnailRenderer"))
 
         val nav = r.obj("navigationEndpoint")
@@ -79,7 +92,11 @@ object Feed {
             .obj("musicPlayButtonRenderer").obj("playNavigationEndpoint").obj("watchPlaylistEndpoint").str("playlistId")
 
         val sub = parts.joinToString(" • ")
-        val artist = parts.firstOrNull() ?: ""
+        val artist = runs
+            .filter { it.obj("navigationEndpoint").obj("browseEndpoint").str("browseId")?.startsWith("UC") == true }
+            .joinToString(", ") { it.optString("text") }
+            .ifEmpty { parts.firstOrNull() ?: "" }
+
         return when {
             watch != null -> HomeItem(Kind.SONG, title, sub, artist, thumb, watch.str("videoId") ?: return null, null)
             mix != null -> HomeItem(Kind.PLAYLIST, title, sub, artist, thumb, null, mix.str("playlistId") ?: return null)
@@ -96,7 +113,7 @@ object Feed {
     private fun listRow(r: JSONObject): HomeItem? {
         val cols = r.arr("flexColumns").objs().map { it.obj("musicResponsiveListItemFlexColumnRenderer").obj("text") }
         val title = cols.getOrNull(0).firstText() ?: return null
-        val parts = parts(cols.getOrNull(1))
+        val parts = parts(cols.getOrNull(1).runs())
         val videoId = r.obj("playlistItemData").str("videoId")
             ?: r.obj("overlay").obj("musicItemThumbnailOverlayRenderer").obj("content").obj("musicPlayButtonRenderer")
                 .obj("playNavigationEndpoint").obj("watchEndpoint").str("videoId")
@@ -107,8 +124,8 @@ object Feed {
     private fun thumb(renderer: JSONObject?) = renderer.obj("musicThumbnailRenderer").obj("thumbnail")
         .arr("thumbnails").objs().lastOrNull().str("url")
 
-    private fun parts(runs: JSONObject?) = runs.runs().map { it.optString("text") }
-        .filter { it.isNotBlank() && it.trim() != "•" }
+    private fun parts(runs: List<JSONObject>) = runs.map { it.optString("text") }
+        .filter { it.isNotBlank() && it.trim().lowercase() !in seps }
 
     private fun seconds(text: String?): Long =
         text?.split(":")?.mapNotNull { it.toLongOrNull() }?.fold(0L) { acc, n -> acc * 60 + n } ?: 0L

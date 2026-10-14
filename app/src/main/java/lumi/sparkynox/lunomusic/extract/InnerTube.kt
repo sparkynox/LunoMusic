@@ -21,9 +21,10 @@ object InnerTube {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    fun browse(browseId: String? = null, continuation: String? = null): JSONObject {
+    fun browse(browseId: String? = null, continuation: String? = null, params: String? = null): JSONObject {
         val body = JSONObject()
         browseId?.let { body.put("browseId", it) }
+        params?.let { body.put("params", it) }
         continuation?.let { body.put("continuation", it) }
         return post("browse", body)
     }
