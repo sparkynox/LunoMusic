@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -18,10 +19,23 @@ import androidx.media3.session.SessionToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import lumi.sparkynox.lunomusic.auth.Session
 import lumi.sparkynox.lunomusic.extract.Extractor
+import lumi.sparkynox.lunomusic.extract.Feed
+import lumi.sparkynox.lunomusic.extract.HomeItem
+import lumi.sparkynox.lunomusic.extract.HomeSection
+import lumi.sparkynox.lunomusic.extract.Kind
 import lumi.sparkynox.lunomusic.extract.Track
 
 class MusicVM(app: Application) : AndroidViewModel(app) {
+    var tab by mutableIntStateOf(0)
+    var showLogin by mutableStateOf(false)
+    var loggedIn by mutableStateOf(Session.loggedIn)
+
+    var home by mutableStateOf<List<HomeSection>>(emptyList())
+    var homeCont by mutableStateOf<String?>(null)
+    var homeLoading by mutableStateOf(false)
+
     var query by mutableStateOf("")
     var results by mutableStateOf<List<Track>>(emptyList())
     var loading by mutableStateOf(false)
@@ -55,6 +69,40 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             playing = c.isPlaying
             if (c.mediaItemCount > 0) nowPlaying = c.mediaMetadata
         }, ContextCompat.getMainExecutor(app))
+
+        loadHome()
+    }
+
+    fun loadHome(more: Boolean = false) {
+        if (homeLoading) return
+        viewModelScope.launch {
+            homeLoading = true
+            error = null
+            try {
+                val page = withContext(Dispatchers.IO) { Feed.home(if (more) homeCont else null) }
+                home = if (more) home + page.sections else page.sections
+                homeCont = page.continuation
+            } catch (e: Exception) {
+                error = e.message ?: "home failed"
+            }
+            homeLoading = false
+        }
+    }
+
+    fun onLoginDone() {
+        showLogin = false
+        loggedIn = true
+        home = emptyList()
+        homeCont = null
+        loadHome()
+    }
+
+    fun logout() {
+        Session.logout()
+        loggedIn = false
+        home = emptyList()
+        homeCont = null
+        loadHome()
     }
 
     fun search() {
@@ -72,10 +120,31 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun play(index: Int) {
+    fun play(index: Int) = playTracks(results, index)
+
+    fun playItem(section: HomeSection, item: HomeItem) {
+        when (item.kind) {
+            Kind.SONG -> {
+                val songs = section.items.filter { it.kind == Kind.SONG && it.videoId != null }
+                val start = songs.indexOfFirst { it.videoId == item.videoId }.coerceAtLeast(0)
+                playTracks(songs.map { Track(it.videoId!!, it.title, it.artist, it.thumb, 0L) }, start)
+            }
+            Kind.ALBUM, Kind.PLAYLIST -> viewModelScope.launch {
+                try {
+                    val q = withContext(Dispatchers.IO) { Feed.queue(item.playlistId) }
+                    if (q.isEmpty()) error = "nothing to play" else playTracks(q, 0)
+                } catch (e: Exception) {
+                    error = e.message ?: "couldn't load that"
+                }
+            }
+            Kind.ARTIST -> Unit
+        }
+    }
+
+    private fun playTracks(tracks: List<Track>, index: Int) {
         val c = controller ?: return
         error = null
-        c.setMediaItems(results.map { it.toItem() }, index, 0L)
+        c.setMediaItems(tracks.map { it.toItem() }, index, 0L)
         c.prepare()
         c.play()
     }
