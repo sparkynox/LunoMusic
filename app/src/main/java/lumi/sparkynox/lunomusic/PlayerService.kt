@@ -3,6 +3,8 @@ package lumi.sparkynox.lunomusic
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -13,6 +15,7 @@ import lumi.sparkynox.lunomusic.extract.Extractor
 
 class PlayerService : MediaSessionService() {
     private var session: MediaSession? = null
+    private val retries = mutableMapOf<String, Int>()
 
     override fun onCreate() {
         super.onCreate()
@@ -41,6 +44,24 @@ class PlayerService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) player.currentMediaItem?.mediaId?.let { retries.remove(it) }
+            }
+
+            // dead/expired url: drop it, resolve again (other extractor goes first) and carry on from the same spot
+            override fun onPlayerError(error: PlaybackException) {
+                val id = player.currentMediaItem?.mediaId ?: return
+                val tries = retries[id] ?: 0
+                if (error.errorCode in 2000..2999 && tries < 2) {
+                    retries[id] = tries + 1
+                    Extractor.invalidate(id)
+                    player.seekTo(player.currentMediaItemIndex, player.currentPosition)
+                    player.prepare()
+                }
+            }
+        })
 
         session = MediaSession.Builder(this, player).build()
     }

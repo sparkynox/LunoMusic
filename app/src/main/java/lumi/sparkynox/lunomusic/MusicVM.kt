@@ -17,7 +17,10 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import lumi.sparkynox.lunomusic.auth.Session
@@ -27,6 +30,8 @@ import lumi.sparkynox.lunomusic.extract.Feed
 import lumi.sparkynox.lunomusic.extract.HomeItem
 import lumi.sparkynox.lunomusic.extract.HomeSection
 import lumi.sparkynox.lunomusic.extract.Kind
+import lumi.sparkynox.lunomusic.extract.LyricLine
+import lumi.sparkynox.lunomusic.extract.Lyrics
 import lumi.sparkynox.lunomusic.extract.Track
 
 class MusicVM(app: Application) : AndroidViewModel(app) {
@@ -43,9 +48,15 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     var chip by mutableStateOf<Chip?>(null)
 
     var query by mutableStateOf("")
+    var suggestions by mutableStateOf<List<String>>(emptyList())
     var results by mutableStateOf<List<Track>>(emptyList())
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
+
+    var libTitle by mutableStateOf<String?>(null)
+    var libTracks by mutableStateOf<List<Track>>(emptyList())
+    var libPlaylists by mutableStateOf<List<HomeItem>>(emptyList())
+    var libLoading by mutableStateOf(false)
 
     var nowPlaying by mutableStateOf<MediaMetadata?>(null)
     var playing by mutableStateOf(false)
@@ -53,12 +64,25 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     var repeat by mutableIntStateOf(Player.REPEAT_MODE_OFF)
     var queue by mutableStateOf<List<MediaItem>>(emptyList())
     var queueIndex by mutableIntStateOf(0)
+    var endless by mutableStateOf(true)
+    var sleepMinutes by mutableIntStateOf(0)
+
+    var lyrics by mutableStateOf<List<LyricLine>>(emptyList())
+    var lyricsState by mutableStateOf("")
 
     private var controller: MediaController? = null
+    private var extending = false
+    private var sleepJob: Job? = null
+    private var suggestJob: Job? = null
+    private var lyricsFor: String? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             playing = isPlaying
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) error = null
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -79,6 +103,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queueIndex = controller?.currentMediaItemIndex ?: 0
+            maybeExtend()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -110,6 +135,28 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         queueIndex = c.currentMediaItemIndex
     }
 
+    // endless queue: when the queue is about to run out, append the youtube music radio for the current song
+    private fun maybeExtend() {
+        val c = controller ?: return
+        if (!endless || extending || c.repeatMode != Player.REPEAT_MODE_OFF) return
+        if (c.mediaItemCount - c.currentMediaItemIndex > 3) return
+        val seed = c.currentMediaItem?.mediaId ?: return
+        extending = true
+        viewModelScope.launch {
+            try {
+                val more = withContext(Dispatchers.IO) { Feed.queue("RDAMVM$seed", seed) }
+                val have = (0 until c.mediaItemCount).map { c.getMediaItemAt(it).mediaId }.toSet()
+                val fresh = more.filter { it.id !in have }
+                if (fresh.isNotEmpty()) c.addMediaItems(fresh.map { it.toItem() })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // try again on the next transition
+            }
+            extending = false
+        }
+    }
+
     fun loadHome(more: Boolean = false) {
         if (homeLoading) return
         viewModelScope.launch {
@@ -122,6 +169,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 home = if (more) home + page.sections else page.sections
                 homeCont = page.continuation
                 if (!more && chip == null && page.chips.isNotEmpty()) chips = page.chips
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = e.message ?: "home failed"
             }
@@ -141,6 +190,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         chips = emptyList()
         home = emptyList()
         homeCont = null
+        libTitle = null
+        libPlaylists = emptyList()
         loadHome()
     }
 
@@ -156,20 +207,90 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         resetHome()
     }
 
-    fun search() {
-        if (query.isBlank()) return
+    fun onQuery(q: String) {
+        query = q
+        suggestJob?.cancel()
+        if (q.isBlank()) {
+            suggestions = emptyList()
+            return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(250)
+            suggestions = try {
+                withContext(Dispatchers.IO) { Feed.suggestions(q.trim()) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    fun search(q: String = query) {
+        if (q.isBlank()) return
+        query = q
+        suggestJob?.cancel()
+        suggestions = emptyList()
         viewModelScope.launch {
             loading = true
             error = null
             try {
-                results = withContext(Dispatchers.IO) { Extractor.search(query.trim()) }
+                results = withContext(Dispatchers.IO) { Extractor.search(q.trim()) }
                 if (results.isEmpty()) error = "nothing found"
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = e.message ?: "search failed"
             }
             loading = false
         }
     }
+
+    fun loadLibrary() {
+        if (!loggedIn || libLoading) return
+        viewModelScope.launch {
+            libLoading = true
+            try {
+                libPlaylists = withContext(Dispatchers.IO) { Feed.playlists() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: "library failed"
+            }
+            libLoading = false
+        }
+    }
+
+    fun openLiked() = openList("Liked songs") { Feed.playlistSongs("LM").ifEmpty { Feed.queue("LM") } }
+
+    fun openHistory() = openList("History") { Feed.history() }
+
+    fun openPlaylist(item: HomeItem) {
+        val id = item.playlistId ?: return
+        openList(item.title) { Feed.playlistSongs(id).ifEmpty { Feed.queue(id) } }
+    }
+
+    private fun openList(title: String, load: () -> List<Track>) {
+        libTitle = title
+        libTracks = emptyList()
+        libLoading = true
+        viewModelScope.launch {
+            try {
+                libTracks = withContext(Dispatchers.IO) { load() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: "couldn't load that"
+            }
+            libLoading = false
+        }
+    }
+
+    fun closeList() {
+        libTitle = null
+    }
+
+    fun playLib(index: Int) = playTracks(libTracks, index)
 
     fun play(index: Int) = playTracks(results, index)
 
@@ -184,6 +305,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 try {
                     val q = withContext(Dispatchers.IO) { Feed.queue(item.playlistId) }
                     if (q.isEmpty()) error = "nothing to play" else playTracks(q, 0)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     error = e.message ?: "couldn't load that"
                 }
@@ -203,6 +326,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         c.setMediaItems(tracks.map { it.toItem() }, index, 0L)
         c.prepare()
         c.play()
+        maybeExtend()
     }
 
     fun toggle() {
@@ -241,6 +365,45 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun playQueueIndex(i: Int) {
         controller?.seekTo(i, 0L)
+    }
+
+    fun cycleSleep() {
+        val opts = listOf(0, 15, 30, 60)
+        sleepMinutes = opts[(opts.indexOf(sleepMinutes) + 1) % opts.size]
+        sleepJob?.cancel()
+        if (sleepMinutes > 0) {
+            val m = sleepMinutes
+            sleepJob = viewModelScope.launch {
+                delay(m * 60_000L)
+                controller?.pause()
+                sleepMinutes = 0
+            }
+        }
+    }
+
+    fun loadLyrics() {
+        val meta = nowPlaying ?: return
+        val title = meta.title?.toString() ?: return
+        val artist = meta.artist?.toString() ?: ""
+        val key = "$title|$artist"
+        if (key == lyricsFor) return
+        lyricsFor = key
+        lyrics = emptyList()
+        lyricsState = "loading"
+        val secs = duration() / 1000
+        viewModelScope.launch {
+            val lines = try {
+                withContext(Dispatchers.IO) { Lyrics.fetch(title, artist, secs) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (lyricsFor == key) {
+                lyrics = lines
+                lyricsState = if (lines.isEmpty()) "none" else ""
+            }
+        }
     }
 
     override fun onCleared() {
