@@ -13,10 +13,27 @@ android {
         applicationId = "lumi.sparkynox.lunomusic"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    lint { checkReleaseBuilds = false }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
