@@ -9,10 +9,14 @@ Streams come from the BravePipe extractor. When it breaks (YouTube changes somet
 - Google login (YT Music) and your own personalised home feed
 - Mood chips, quick picks, mixes, albums and playlists from the feed
 - Full screen player with blurred artwork, seek bar, queue, shuffle and repeat
-- Song search (YouTube Music results)
+- Endless queue: when the queue runs low it keeps going with the YouTube Music radio of the current song
+- Synced lyrics (LRCLIB), sleep timer
+- Library: liked songs, history and your playlists (needs login)
+- Song search with live suggestions
 - Background playback with media notification and lock screen controls
+- Auto recovery when a stream URL dies mid-song (re-resolves, other extractor first)
 
-Coming next: synced lyrics, library (liked songs, playlists), downloads, sleep timer, search filters, artist and album pages.
+Coming next: downloads, artist and album pages, search filters, listening stats, equalizer.
 
 ## How it works
 
@@ -44,6 +48,7 @@ Locally you need JDK 17, Python 3.11 on your PATH (Chaquopy needs it at build ti
 - [EchoMusic](https://github.com/EchoMusicApp/Echo-Music): feature and UI inspiration, and the reference for how a YT Music login and home feed behave
 - [ArchiveTune](https://github.com/rukamori/ArchiveTune): UI inspiration, mainly the player layout
 - [BravePipe](https://github.com/bravepipeproject) / [NewPipe](https://github.com/TeamNewPipe) extractor
+- [LRCLIB](https://lrclib.net): synced lyrics
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Chaquopy](https://chaquo.com/chaquopy/)
 
