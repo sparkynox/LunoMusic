@@ -1,22 +1,24 @@
 # LunoMusic
 
-Open source music app for Android, written from scratch. Search a song, tap it, it plays. No ads.
+Open source music app for Android. Search a song, tap it, it plays. No ads.
 
 Streams come from the BravePipe extractor. When it breaks (YouTube changes something every other week), yt-dlp running inside the app takes over.
 
 ## Features
 
-- Google login (YT Music) and your own personalised home feed
-- Mood chips, quick picks, mixes, albums and playlists from the feed
-- Full screen player with blurred artwork, seek bar, queue, shuffle and repeat
+- Google login (YT Music) and your own personalised home feed with mood chips
+- Full screen player: blurred artwork, seek bar, synced lyrics, queue, shuffle, repeat, sleep timer, like button
+- Queue: swipe a song away or hit the cross to remove it
 - Endless queue: when the queue runs low it keeps going with the YouTube Music radio of the current song
-- Synced lyrics (LRCLIB), sleep timer
-- Library: liked songs, history and your playlists (needs login)
-- Song search with live suggestions
-- Background playback with media notification and lock screen controls
+- Search with live suggestions and filters (songs, albums, playlists, artists, videos)
+- Artist and album / playlist pages
+- Library: liked songs, history, your playlists, downloads, your top 50
+- Downloads for offline playback
+- Stats: time listened, top artists, top songs, listening by day
+- Settings and detailed in-app logs (Settings > Logs), copy or share the whole log when something breaks
 - Auto recovery when a stream URL dies mid-song (re-resolves, other extractor first)
 
-Coming next: downloads, artist and album pages, search filters, listening stats, equalizer.
+Coming next: equalizer, crossfade, playlists you can edit.
 
 ## How it works
 
@@ -45,24 +47,20 @@ Locally you need JDK 17, Python 3.11 on your PATH (Chaquopy needs it at build ti
 
 ## Credits
 
-- [EchoMusic](https://github.com/EchoMusicApp/Echo-Music): feature and UI inspiration, and the reference for how a YT Music login and home feed behave
-- [ArchiveTune](https://github.com/rukamori/ArchiveTune): UI inspiration, mainly the player layout
+- [EchoMusic](https://github.com/EchoMusicApp/Echo-Music): feature and UI inspiration, reference for the YT Music login and home feed
+- [ArchiveTune](https://github.com/rukamori/ArchiveTune): UI inspiration, player layout, stats and library screens
 - [BravePipe](https://github.com/bravepipeproject) / [NewPipe](https://github.com/TeamNewPipe) extractor
 - [LRCLIB](https://lrclib.net): synced lyrics
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Chaquopy](https://chaquo.com/chaquopy/)
 
-LunoMusic is written from scratch. No source code from EchoMusic or ArchiveTune is used, they are credited for ideas and design inspiration only.
-
 ## Contributing
 
-Issues and PRs are welcome. Keep changes small and focused, and say what you tested on.
+Issues and PRs are welcome. Keep changes small and focused, and say what you tested on. When reporting a bug, attach the log from Settings > Logs.
 
 ## License
 
-The LunoMusic source code is MIT, see [LICENSE](LICENSE).
-
-The BravePipe/NewPipe extractor it links against is GPL-3.0, so the compiled APK as a whole has to be distributed under GPL-3.0 terms.
+GPL-3.0, see [LICENSE](LICENSE). The extractor LunoMusic links against is GPL-3.0 too, and the UI draws on EchoMusic and ArchiveTune which are GPL-3.0.
 
 Not affiliated with YouTube or Google.
 
