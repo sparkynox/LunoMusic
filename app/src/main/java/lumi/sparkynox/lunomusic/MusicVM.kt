@@ -162,7 +162,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     // ---------- endless queue: when the queue is about to run out, append the youtube music radio for the current song
 
-    fun setEndless(v: Boolean) {
+    fun setEndlessEnabled(v: Boolean) {
         endless = v
         Prefs.endless = v
         AppLog.i("VM", "endless queue ${if (v) "on" else "off"}")
