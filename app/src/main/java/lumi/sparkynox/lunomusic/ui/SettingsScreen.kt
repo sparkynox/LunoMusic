@@ -50,7 +50,7 @@ fun SettingsScreen(vm: MusicVM) {
         ) { if (vm.loggedIn) vm.logout() else { vm.pop(); vm.showLogin = true } }
 
         Group("Playback")
-        SwitchRow("Endless queue", "When the queue runs low, keep going with the YouTube Music radio of the current song", vm.endless) { vm.setEndless(it) }
+        SwitchRow("Endless queue", "When the queue runs low, keep going with the YouTube Music radio of the current song", vm.endless) { vm.setEndlessEnabled(it) }
         SwitchRow("Try yt-dlp first", "Off: BravePipe first, yt-dlp as fallback. A song that fails to play switches the order by itself", ytFirst) {
             ytFirst = it
             Prefs.ytdlpFirst = it

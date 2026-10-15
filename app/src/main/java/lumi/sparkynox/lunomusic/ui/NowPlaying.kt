@@ -251,7 +251,7 @@ fun NowPlaying(vm: MusicVM) {
                     add(Triple("Queue", panel == 1) { panel = if (panel == 1) 0 else 1 })
                     add(Triple("Lyrics", panel == 2) { panel = if (panel == 2) 0 else 2 })
                     add(Triple(if (vm.sleepMinutes > 0) "Sleep ${vm.sleepMinutes}m" else "Sleep", vm.sleepMinutes > 0) { vm.cycleSleep() })
-                    add(Triple("Endless", vm.endless) { vm.setEndless(!vm.endless) })
+                    add(Triple("Endless", vm.endless) { vm.setEndlessEnabled(!vm.endless) })
                     add(Triple("Shuffle", vm.shuffle) { vm.toggleShuffle() })
                     add(
                         Triple(
