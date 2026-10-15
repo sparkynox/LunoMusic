@@ -190,7 +190,7 @@ fun StatsScreen(vm: MusicVM) {
                         val label = "SMTWTFS"[cal.get(Calendar.DAY_OF_WEEK) - 1].toString()
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
-                                Modifier.size(width = 18.dp, height = (80.dp * ms.toFloat() / max).coerceAtLeast(4.dp))
+                                Modifier.size(width = 18.dp, height = maxOf(4.dp, 80.dp * (ms.toFloat() / max.toFloat())))
                                     .clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primary)
                             )
                             Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
