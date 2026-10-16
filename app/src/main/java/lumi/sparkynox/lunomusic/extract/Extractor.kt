@@ -41,6 +41,10 @@ object Extractor {
 
     private val cache = ConcurrentHashMap<String, Cached>()
     private val avoid = ConcurrentHashMap<String, Int>()
+    private val formats = ConcurrentHashMap<String, String>()
+
+    // codec label of the stream we resolved last for this song, if we know it
+    fun formatOf(id: String): String? = formats[id]
 
     // call when a url turned out dead, next resolve tries the other extractor first
     fun invalidate(id: String) {
@@ -128,6 +132,7 @@ object Extractor {
         val m4a = all.filter { it.format == MediaFormat.M4A }
         val best = (m4a.ifEmpty { all }).maxByOrNull { it.averageBitrate }
         AppLog.d("Resolve", "$id: pipe found ${info.audioStreams.size} audio streams, ${all.size} progressive, picked ${best?.format?.name} ${best?.averageBitrate}kbps")
+        best?.format?.name?.let { formats[id] = it }
         return best?.content
     }
 
