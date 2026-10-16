@@ -94,6 +94,7 @@ fun SettingsScreen(vm: MusicVM) {
         Group("Listening") {
             ClickRow(R.drawable.stats, "Stats", "Your top songs, artists and listening time") { vm.push(StatsPage) }
             ClickRow(R.drawable.delete, "Clear listening stats", "Starts the stats from zero") { confirm = "stats" }
+            ClickRow(R.drawable.block, "Hidden songs", "${vm.blockedIds.size} marked as not interested") { confirm = "hidden" }
             ClickRow(R.drawable.sync, "Clear stream url cache", "Forces a fresh lookup for every song") { Extractor.clearCache() }
         }
 
@@ -114,11 +115,23 @@ fun SettingsScreen(vm: MusicVM) {
     confirm?.let { what ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text(if (what == "downloads") "Delete all downloads?" else "Clear listening stats?") },
+            title = {
+                Text(
+                    when (what) {
+                        "downloads" -> "Delete all downloads?"
+                        "stats" -> "Clear listening stats?"
+                        else -> "Unhide all songs?"
+                    }
+                )
+            },
             text = { Text("This can't be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    if (what == "downloads") Downloads.deleteAll() else Stats.clear()
+                    when (what) {
+                        "downloads" -> Downloads.deleteAll()
+                        "stats" -> Stats.clear()
+                        else -> vm.clearHidden()
+                    }
                     confirm = null
                 }) { Text("Yes") }
             },
