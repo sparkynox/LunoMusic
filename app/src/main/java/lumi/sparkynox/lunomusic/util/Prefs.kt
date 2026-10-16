@@ -21,4 +21,12 @@ object Prefs {
     var verboseLogs: Boolean
         get() = sp.getBoolean("verbose_logs", true)
         set(v) = sp.edit().putBoolean("verbose_logs", v).apply()
+
+    var dynamicColor: Boolean
+        get() = sp.getBoolean("dynamic_color", true)
+        set(v) = sp.edit().putBoolean("dynamic_color", v).apply()
+
+    var pureBlack: Boolean
+        get() = sp.getBoolean("pure_black", false)
+        set(v) = sp.edit().putBoolean("pure_black", v).apply()
 }
