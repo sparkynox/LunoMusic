@@ -25,7 +25,7 @@ private data class Credit(val name: String, val what: String, val url: String)
 
 private val credits = listOf(
     Credit("EchoMusic", "Feature and UI inspiration, reference for the YT Music login and home feed", "https://github.com/EchoMusicApp/Echo-Music"),
-    Credit("ArchiveTune", "UI inspiration, mainly the player layout", "https://github.com/rukamori/ArchiveTune"),
+    Credit("ArchiveTune", "Theme, typography, icons, wavy slider, playback controls and the overall UI design", "https://github.com/rukamori/ArchiveTune"),
     Credit("BravePipe / NewPipe extractor", "Search and stream extraction", "https://github.com/bravepipeproject"),
     Credit("LRCLIB", "Synced lyrics", "https://lrclib.net"),
     Credit("yt-dlp", "Fallback stream extraction", "https://github.com/yt-dlp/yt-dlp"),
@@ -56,7 +56,7 @@ fun AboutScreen(onBack: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "The UI and features are inspired by EchoMusic and ArchiveTune (both GPL-3.0), thank you to their developers.",
+            "The theme, typography, icons, wavy slider and animated playback controls are taken from ArchiveTune (GPL-3.0, by Rukamori). EchoMusic (GPL-3.0) inspired some features. Thank you to both developers.",
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(Modifier.height(8.dp))

@@ -51,7 +51,7 @@ import lumi.sparkynox.lunomusic.data.Stats
 import lumi.sparkynox.lunomusic.extract.Track
 import java.util.Calendar
 
-private val palette = listOf(Color(0xFFFFB300), Color(0xFFFF5C7A), Color(0xFF6BCB77), Color(0xFF4D96FF), Color(0xFFB983FF))
+private val fixedPalette = listOf(Color(0xFFFF5C7A), Color(0xFF6BCB77), Color(0xFF4D96FF), Color(0xFFB983FF))
 
 private fun dur(ms: Long): String {
     val m = ms / 60000
@@ -81,6 +81,7 @@ fun StatsScreen(vm: MusicVM) {
         plays = withContext(Dispatchers.IO) { Stats.since(from) }
     }
 
+    val palette = listOf(MaterialTheme.colorScheme.primary) + fixedPalette
     val total = plays.sumOf { it.ms }
     val bySong = plays.groupBy { it.id }
     val byArtist = plays.groupBy { firstArtist(it.artist) }.mapValues { e -> e.value.sumOf { it.ms } }.toList().sortedByDescending { it.second }
@@ -120,7 +121,7 @@ fun StatsScreen(vm: MusicVM) {
         }
 
         item {
-            Surface(color = Color(0xFF1F3A5F), shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Column(Modifier.padding(20.dp)) {
                     Text("Total time listened", style = MaterialTheme.typography.bodyMedium)
                     Text(dur(total), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -136,7 +137,7 @@ fun StatsScreen(vm: MusicVM) {
 
         item {
             SectionHeader("Artist breakdown")
-            Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     val top = byArtist.take(5)
                     val sum = top.sumOf { it.second }.coerceAtLeast(1L)
@@ -182,7 +183,7 @@ fun StatsScreen(vm: MusicVM) {
 
         item {
             SectionHeader("Listening by day")
-            Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 val max = (days.maxOf { it.second }).coerceAtLeast(1L)
                 Row(Modifier.fillMaxWidth().height(140.dp).padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                     days.forEach { (start, ms) ->
@@ -223,14 +224,14 @@ fun StatsScreen(vm: MusicVM) {
 @Composable
 private fun Stat(value: String, label: String) {
     Column {
-        Text(value, style = MaterialTheme.typography.titleLarge, color = Color(0xFFBBD4FF))
+        Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
         Text(label, style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
 private fun HighlightCard(label: String, title: String, sub: String, thumb: String?, round: Boolean) {
-    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             AsyncImage(
                 model = thumb, contentDescription = null, contentScale = ContentScale.Crop,
