@@ -48,7 +48,7 @@ Locally you need JDK 17, Python 3.11 on your PATH (Chaquopy needs it at build ti
 ## Credits
 
 - [EchoMusic](https://github.com/EchoMusicApp/Echo-Music): feature and UI inspiration, reference for the YT Music login and home feed
-- [ArchiveTune](https://github.com/rukamori/ArchiveTune): UI inspiration, player layout, stats and library screens
+- [ArchiveTune](https://github.com/rukamori/ArchiveTune) by Rukamori: theme, Poppins typography, vector icons, wavy slider and animated playback controls are taken from it, the rest of the UI follows its design
 - [BravePipe](https://github.com/bravepipeproject) / [NewPipe](https://github.com/TeamNewPipe) extractor
 - [LRCLIB](https://lrclib.net): synced lyrics
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
