@@ -75,6 +75,10 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         private set
     var sleepMinutes by mutableIntStateOf(0)
 
+    // "not interested" songs: hidden from queue, home, search and the endless radio
+    var blockedIds by mutableStateOf(Prefs.blockedIds)
+        private set
+
     var lyrics by mutableStateOf<List<LyricLine>>(emptyList())
     var lyricsState by mutableStateOf("")
 
@@ -178,7 +182,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             try {
                 val more = withContext(Dispatchers.IO) { Feed.queue("RDAMVM$seed", seed) }
                 val have = (0 until c.mediaItemCount).map { c.getMediaItemAt(it).mediaId }.toSet()
-                val fresh = more.filter { it.id !in have }
+                // smart queue: never re-add songs already in the queue or marked "not interested"
+                val fresh = more.filter { it.id !in have && it.id !in blockedIds }
                 if (fresh.isNotEmpty()) c.addMediaItems(fresh.map { it.toItem() })
                 AppLog.i("Endless", "radio for $seed: ${more.size} songs, ${fresh.size} new added")
             } catch (e: CancellationException) {
@@ -188,6 +193,40 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             }
             extending = false
         }
+    }
+
+    // ---------- not interested: block a song everywhere
+
+    fun notInterested(id: String, title: String) {
+        if (id.isBlank()) return
+        blockedIds = blockedIds + id
+        Prefs.blockedIds = blockedIds
+        // drop every copy of it from the queue
+        controller?.let { c ->
+            var i = c.mediaItemCount - 1
+            while (i >= 0) {
+                if (c.getMediaItemAt(i).mediaId == id) c.removeMediaItem(i)
+                i--
+            }
+        }
+        // hide it from what's on screen right now
+        home = home.map { s -> s.copy(items = s.items.filter { it.videoId != id }) }
+        results = results.filter { it.videoId != id }
+        AppLog.i("VM", "not interested in '$title' ($id), ${blockedIds.size} hidden total")
+    }
+
+    fun notInterested(index: Int) {
+        val c = controller ?: return
+        if (index in 0 until c.mediaItemCount) {
+            val m = c.getMediaItemAt(index)
+            notInterested(m.mediaId, m.mediaMetadata.title?.toString() ?: "")
+        }
+    }
+
+    fun clearHidden() {
+        blockedIds = emptySet()
+        Prefs.blockedIds = emptySet()
+        AppLog.i("VM", "unhid all songs")
     }
 
     // ---------- home / login
@@ -201,7 +240,11 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 val page = withContext(Dispatchers.IO) {
                     Feed.home(if (more) homeCont else null, if (more) null else chip)
                 }
-                home = if (more) home + page.sections else page.sections
+                // keep "not interested" songs out of the feed
+                val sections = page.sections
+                    .map { s -> s.copy(items = s.items.filter { it.videoId == null || it.videoId !in blockedIds }) }
+                    .filter { it.items.isNotEmpty() }
+                home = if (more) home + sections else sections
                 homeCont = page.continuation
                 if (!more && chip == null && page.chips.isNotEmpty()) chips = page.chips
                 AppLog.i("Home", "loaded ${page.sections.size} sections, ${page.chips.size} chips (more=$more, chip=${chip?.title})")
@@ -316,7 +359,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             loading = true
             error = null
             try {
-                results = withContext(Dispatchers.IO) { Extractor.search(q.trim(), filter) }
+                val found = withContext(Dispatchers.IO) { Extractor.search(q.trim(), filter) }
+                results = found.filter { it.videoId == null || it.videoId !in blockedIds }
                 if (results.isEmpty()) error = "nothing found"
             } catch (e: CancellationException) {
                 throw e
@@ -383,6 +427,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 page.tracks = withContext(Dispatchers.IO) { load() }
+                    .filter { it.id !in blockedIds }
                 AppLog.i("Page", "$tag: ${page.tracks.size} tracks")
             } catch (e: CancellationException) {
                 throw e
@@ -402,7 +447,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 if (data.name.isNotBlank()) page.name = data.name
                 data.thumb?.let { page.thumb = it }
                 page.description = data.description
-                page.songs = data.songs
+                page.songs = data.songs.filter { it.id !in blockedIds }
                 page.sections = data.sections
                 AppLog.i("Artist", "${page.name}: ${data.songs.size} songs, ${data.sections.size} sections")
             } catch (e: CancellationException) {
@@ -458,10 +503,17 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             return
         }
         if (tracks.isEmpty()) return
+        // smart queue: never start a list containing "not interested" songs
+        val playable = tracks.filter { it.id !in blockedIds }
+        if (playable.isEmpty()) {
+            error = "nothing to play"
+            return
+        }
+        val start = playable.indexOf(tracks[index.coerceIn(0, tracks.lastIndex)]).coerceAtLeast(0)
         error = null
-        AppLog.i("VM", "play ${tracks.size} tracks from #$index: '${tracks[index.coerceIn(0, tracks.lastIndex)].title}'")
+        AppLog.i("VM", "play ${playable.size} tracks from #$start: '${playable[start].title}'")
         if (shuffled) c.shuffleModeEnabled = true
-        c.setMediaItems(tracks.map { it.toItem() }, if (shuffled) tracks.indices.random() else index, 0L)
+        c.setMediaItems(playable.map { it.toItem() }, if (shuffled) playable.indices.random() else start, 0L)
         c.prepare()
         c.play()
         maybeExtend()
@@ -471,6 +523,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val q = withContext(Dispatchers.IO) { Feed.queue("RDAMVM$seed", seed) }
+                    .filter { it.id !in blockedIds }
                 if (q.isNotEmpty()) playTracks(q, 0) else error = "no radio for this one"
             } catch (e: CancellationException) {
                 throw e
@@ -498,6 +551,15 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             AppLog.i("VM", "removed #$index '${c.getMediaItemAt(index).mediaMetadata.title}' from the queue")
             c.removeMediaItem(index)
         }
+    }
+
+    fun clearQueue() {
+        val c = controller ?: return
+        AppLog.i("VM", "queue cleared")
+        c.stop()
+        c.clearMediaItems()
+        queue = emptyList()
+        queueIndex = 0
     }
 
     fun download(t: Track) = Downloads.start(t)
