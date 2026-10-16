@@ -205,6 +205,10 @@ fun TrackRow(
                     text = { Text("Add to queue") }, onClick = { menu = false; vm.addToQueue(t) },
                     leadingIcon = { Icon(painterResource(R.drawable.queue_music), null) }
                 )
+                DropdownMenuItem(
+                    text = { Text("Not interested") }, onClick = { menu = false; vm.notInterested(t.id, t.title) },
+                    leadingIcon = { Icon(painterResource(R.drawable.block), null) }
+                )
                 if (offline) {
                     DropdownMenuItem(
                         text = { Text("Remove download") }, onClick = { menu = false; Downloads.delete(t.id) },
