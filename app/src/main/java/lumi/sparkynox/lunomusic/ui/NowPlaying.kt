@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +51,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -76,7 +80,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.lerp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
@@ -360,14 +363,68 @@ private fun QueuePanel(vm: MusicVM) {
     val state = rememberLazyListState()
     LaunchedEffect(Unit) { if (vm.queueIndex > 1) state.scrollToItem((vm.queueIndex - 1).coerceAtLeast(0)) }
 
+    // search smart queue: filter the queue without touching the real order
+    var q by remember { mutableStateOf("") }
+    val needle = q.trim().lowercase()
+    val shown = remember(vm.queue, q) {
+        vm.queue.mapIndexed { i, item -> i to item }
+            .filter { (_, item) ->
+                needle.isEmpty() ||
+                    item.mediaMetadata.title?.toString()?.lowercase()?.contains(needle) == true ||
+                    item.mediaMetadata.artist?.toString()?.lowercase()?.contains(needle) == true
+            }
+    }
+
     Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
         Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, top = 22.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Queue", style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.weight(1f))
             Text("${vm.queue.size} songs", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+            RoundIcon(
+                R.drawable.clear_all, { vm.clearQueue() }, size = 38.dp, iconSize = 18.dp,
+                container = Color.White.copy(alpha = 0.14f), tint = Color.White
+            )
         }
+
+        // search in queue
+        TextField(
+            value = q,
+            onValueChange = { q = it },
+            placeholder = { Text("Search in queue", color = Color.White.copy(alpha = 0.5f)) },
+            leadingIcon = { Icon(painterResource(R.drawable.search), null, tint = Color.White.copy(alpha = 0.7f)) },
+            trailingIcon = {
+                if (q.isNotEmpty()) RoundIcon(
+                    R.drawable.close, { q = "" }, size = 32.dp, iconSize = 16.dp,
+                    container = Color.Transparent, tint = Color.White.copy(alpha = 0.7f)
+                )
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.White.copy(alpha = 0.12f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color.White
+            ),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
         LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-            itemsIndexed(vm.queue, key = { i, _ -> keys[i] }) { i, item ->
-                QueueRow(vm, i, item, i == vm.queueIndex, Modifier.animateItem())
+            if (shown.isEmpty()) {
+                item {
+                    Text(
+                        if (vm.queue.isEmpty()) "Queue is empty" else "No matches in the queue",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            } else {
+                items(shown, key = { (i, _) -> keys.getOrElse(i) { "$i" } }) { (i, item) ->
+                    QueueRow(vm, i, item, i == vm.queueIndex, Modifier.animateItem())
+                }
             }
         }
     }
@@ -379,10 +436,12 @@ private fun QueueRow(vm: MusicVM, i: Int, item: MediaItem, current: Boolean, mod
     val index = rememberUpdatedState(i)
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { v ->
-            if (v != SwipeToDismissBoxValue.Settled) {
-                vm.removeFromQueue(index.value)
-                true
-            } else false
+            // swipe right -> remove from queue, swipe left -> not interested
+            when (v) {
+                SwipeToDismissBoxValue.StartToEnd -> { vm.removeFromQueue(index.value); true }
+                SwipeToDismissBoxValue.EndToStart -> { vm.notInterested(index.value); true }
+                else -> false
+            }
         }
     )
 
@@ -390,8 +449,18 @@ private fun QueueRow(vm: MusicVM, i: Int, item: MediaItem, current: Boolean, mod
         state = state,
         modifier = modifier.padding(vertical = 3.dp).clip(RoundedCornerShape(18.dp)),
         backgroundContent = {
-            Box(Modifier.fillMaxSize().background(scheme.errorContainer).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                Icon(painterResource(R.drawable.delete), null, tint = scheme.onErrorContainer)
+            val dir = state.dismissDirection
+            val notInterested = dir == SwipeToDismissBoxValue.EndToStart
+            Box(
+                Modifier.fillMaxSize()
+                    .background(if (notInterested) scheme.tertiaryContainer else scheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (notInterested) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Icon(
+                    painterResource(if (notInterested) R.drawable.block else R.drawable.delete), null,
+                    tint = if (notInterested) scheme.onTertiaryContainer else scheme.onErrorContainer
+                )
             }
         }
     ) {
