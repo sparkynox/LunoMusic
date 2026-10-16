@@ -113,13 +113,17 @@ fun NowPlaying(vm: MusicVM) {
     val bg = lerp(scheme.background, artColor, 0.85f)
     val text = Color.White
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(vm.playing) {
         while (true) {
             if (drag == null) {
                 pos = vm.position()
                 dur = vm.duration()
             }
-            delay(250)
+            if (vm.playing) {
+                delay(16)
+            } else {
+                delay(250)
+            }
         }
     }
     LaunchedEffect(panel, meta?.title) { if (panel == 2) vm.loadLyrics() }
@@ -129,7 +133,6 @@ fun NowPlaying(vm: MusicVM) {
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(bg, scheme.background)))) {
         Column(Modifier.fillMaxSize()) {
-            // artwork / queue / lyrics area
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
                     targetState = panel,
@@ -171,7 +174,6 @@ fun NowPlaying(vm: MusicVM) {
             }
 
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                // title, artist, like
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         AnimatedContent(
@@ -214,7 +216,6 @@ fun NowPlaying(vm: MusicVM) {
 
                 Spacer(Modifier.height(8.dp))
 
-                // wavy slider
                 val fraction = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
                 WavySliderExpressive(
                     value = { drag ?: fraction },
@@ -325,7 +326,6 @@ private fun VolumeRow(text: Color) {
     val max = remember { am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var v by remember { mutableFloatStateOf(am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max) }
 
-    // follow the hardware buttons too
     LaunchedEffect(Unit) {
         while (true) {
             v = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
@@ -363,7 +363,6 @@ private fun QueuePanel(vm: MusicVM) {
     val state = rememberLazyListState()
     LaunchedEffect(Unit) { if (vm.queueIndex > 1) state.scrollToItem((vm.queueIndex - 1).coerceAtLeast(0)) }
 
-    // search smart queue: filter the queue without touching the real order
     var q by remember { mutableStateOf("") }
     val needle = q.trim().lowercase()
     val shown = remember(vm.queue, q) {
@@ -385,7 +384,6 @@ private fun QueuePanel(vm: MusicVM) {
             )
         }
 
-        // search in queue
         TextField(
             value = q,
             onValueChange = { q = it },
@@ -436,7 +434,6 @@ private fun QueueRow(vm: MusicVM, i: Int, item: MediaItem, current: Boolean, mod
     val index = rememberUpdatedState(i)
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { v ->
-            // swipe right -> remove from queue, swipe left -> not interested
             when (v) {
                 SwipeToDismissBoxValue.StartToEnd -> { vm.removeFromQueue(index.value); true }
                 SwipeToDismissBoxValue.EndToStart -> { vm.notInterested(index.value); true }
