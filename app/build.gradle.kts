@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "lumi.sparkynox.lunomusic"
-    compileSdk = 36
+    compileSdk = 36 // Safely kept at 36 to match your AGP version constraints
 
     defaultConfig {
         applicationId = "lumi.sparkynox.lunomusic"
@@ -72,8 +72,8 @@ dependencies {
     // Import the BOM platform
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     
-    // Explicit override to grab Material 3 Expressive APIs out of the 1.5.0 alpha channel
-    implementation("androidx.compose.material3:material3:1.5.0-alpha29")
+    // Downgraded to alpha01 to prevent forcing SDK 37/AGP 9.x restrictions
+    implementation("androidx.compose.material3:material3:1.5.0-alpha01")
     
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material:material-icons-core")
