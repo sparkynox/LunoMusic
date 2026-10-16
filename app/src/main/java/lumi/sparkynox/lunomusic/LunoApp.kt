@@ -1,6 +1,8 @@
 package lumi.sparkynox.lunomusic
 
 import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import lumi.sparkynox.lunomusic.auth.Session
 import lumi.sparkynox.lunomusic.data.Db
 import lumi.sparkynox.lunomusic.data.Downloads
@@ -12,7 +14,9 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.localization.ContentCountry
 import org.schabi.newpipe.extractor.localization.Localization
 
-class LunoApp : Application() {
+class LunoApp : Application(), ImageLoaderFactory {
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this).crossfade(250).build()
+
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)

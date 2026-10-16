@@ -20,6 +20,7 @@ class DetailPage(
     val subtitle: String,
     val thumb: String?,
     val isDownloads: Boolean = false,
+    val numbered: Boolean = false,
 ) : Page() {
     var tracks by mutableStateOf<List<Track>>(emptyList())
     var loading by mutableStateOf(true)

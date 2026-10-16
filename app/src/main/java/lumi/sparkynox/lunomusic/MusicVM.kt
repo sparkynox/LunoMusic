@@ -350,7 +350,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     private fun openDetail(item: HomeItem) {
         val id = item.playlistId ?: return
-        val page = DetailPage(item.title, item.subtitle, item.thumb)
+        val page = DetailPage(item.title, item.subtitle, item.thumb, numbered = true)
         push(page)
         loadPage(page, "Detail ${item.title}") { Feed.playlistSongs(id).ifEmpty { Feed.queue(id) } }
     }
@@ -465,6 +465,19 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         c.prepare()
         c.play()
         maybeExtend()
+    }
+
+    fun playRadio(seed: String) {
+        viewModelScope.launch {
+            try {
+                val q = withContext(Dispatchers.IO) { Feed.queue("RDAMVM$seed", seed) }
+                if (q.isNotEmpty()) playTracks(q, 0) else error = "no radio for this one"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = fail("Radio", "couldn't start the radio for $seed", e)
+            }
+        }
     }
 
     fun playNext(t: Track) {
