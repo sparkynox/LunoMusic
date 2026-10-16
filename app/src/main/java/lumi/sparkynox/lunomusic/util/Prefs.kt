@@ -29,4 +29,9 @@ object Prefs {
     var pureBlack: Boolean
         get() = sp.getBoolean("pure_black", false)
         set(v) = sp.edit().putBoolean("pure_black", v).apply()
+
+    // songs the user marked "not interested" — hidden everywhere
+    var blockedIds: Set<String>
+        get() = sp.getStringSet("blocked_ids", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("blocked_ids", v).apply()
 }
