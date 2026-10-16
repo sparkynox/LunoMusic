@@ -240,6 +240,7 @@ fun V9AnimatedPlaybackControls(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun V9MorphingPlayPauseIcon(
     isPlaying: Boolean,
