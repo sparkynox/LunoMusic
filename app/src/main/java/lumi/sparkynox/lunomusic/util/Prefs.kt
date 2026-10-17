@@ -34,4 +34,45 @@ object Prefs {
     var blockedIds: Set<String>
         get() = sp.getStringSet("blocked_ids", emptySet()) ?: emptySet()
         set(v) = sp.edit().putStringSet("blocked_ids", v).apply()
+
+    var bio: String
+        get() = sp.getString("bio", "") ?: ""
+        set(v) = sp.edit().putString("bio", v).apply()
+
+    var customName: String
+        get() = sp.getString("custom_name", "") ?: ""
+        set(v) = sp.edit().putString("custom_name", v).apply()
+
+    // path of the photo picked from the gallery, empty = use the youtube music photo
+    var customAvatar: String
+        get() = sp.getString("custom_avatar", "") ?: ""
+        set(v) = sp.edit().putString("custom_avatar", v).apply()
+
+    var accountName: String
+        get() = sp.getString("account_name", "") ?: ""
+        set(v) = sp.edit().putString("account_name", v).apply()
+
+    var accountHandle: String
+        get() = sp.getString("account_handle", "") ?: ""
+        set(v) = sp.edit().putString("account_handle", v).apply()
+
+    var accountEmail: String
+        get() = sp.getString("account_email", "") ?: ""
+        set(v) = sp.edit().putString("account_email", v).apply()
+
+    var accountPhoto: String
+        get() = sp.getString("account_photo", "") ?: ""
+        set(v) = sp.edit().putString("account_photo", v).apply()
+
+    var autoUpdate: Boolean
+        get() = sp.getBoolean("auto_update", true)
+        set(v) = sp.edit().putBoolean("auto_update", v).apply()
+
+    var lastUpdateCheck: Long
+        get() = sp.getLong("last_update_check", 0L)
+        set(v) = sp.edit().putLong("last_update_check", v).apply()
+
+    var skippedVersion: String
+        get() = sp.getString("skipped_version", "") ?: ""
+        set(v) = sp.edit().putString("skipped_version", v).apply()
 }
