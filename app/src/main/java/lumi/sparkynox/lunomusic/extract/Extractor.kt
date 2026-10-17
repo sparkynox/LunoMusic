@@ -12,7 +12,6 @@ import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeStreamLinkHandlerFactory
 import org.schabi.newpipe.extractor.services.youtube.search.filter.YoutubeFilters
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
-import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -126,12 +125,16 @@ object Extractor {
         throw IOException("no stream for $id", last)
     }
 
+    // only the audio streams are needed, so go through the stream extractor directly. StreamInfo.getInfo
+    // would also parse related videos, subtitles, frames, segments and meta info that nothing here uses
     private fun viaPipe(id: String): String? {
-        val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$id")
-        val all = info.audioStreams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
+        val ex = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$id")
+        ex.fetchPage()
+        val streams = ex.audioStreams
+        val all = streams.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
         val m4a = all.filter { it.format == MediaFormat.M4A }
         val best = (m4a.ifEmpty { all }).maxByOrNull { it.averageBitrate }
-        AppLog.d("Resolve", "$id: pipe found ${info.audioStreams.size} audio streams, ${all.size} progressive, picked ${best?.format?.name} ${best?.averageBitrate}kbps")
+        AppLog.d("Resolve", "$id: pipe found ${streams.size} audio streams, ${all.size} progressive, picked ${best?.format?.name} ${best?.averageBitrate}kbps")
         best?.format?.name?.let { formats[id] = it }
         return best?.content
     }

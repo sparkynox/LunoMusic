@@ -3,10 +3,12 @@ package lumi.sparkynox.lunomusic.extract
 import android.os.SystemClock
 import lumi.sparkynox.lunomusic.auth.Session
 import lumi.sparkynox.lunomusic.util.AppLog
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.security.MessageDigest
@@ -58,21 +60,7 @@ object InnerTube {
         val rb = Request.Builder()
             .url("$ORIGIN/youtubei/v1/$path?prettyPrint=false")
             .post(body.toString().toRequestBody(jsonType))
-            .header("User-Agent", UA)
-            .header("X-Goog-Api-Format-Version", "1")
-            .header("X-YouTube-Client-Name", "67")
-            .header("X-YouTube-Client-Version", CLIENT_VERSION)
-            .header("X-Origin", ORIGIN)
-            .header("Referer", "$ORIGIN/")
-        Session.visitorData?.let { rb.header("X-Goog-Visitor-Id", it) }
-
-        Session.cookie?.let { cookie ->
-            rb.header("Cookie", cookie)
-            Session.sapisid()?.let { s ->
-                val t = System.currentTimeMillis() / 1000
-                rb.header("Authorization", "SAPISIDHASH ${t}_${sha1("$t $s $ORIGIN")}")
-            }
-        }
+            .withHeaders()
 
         val t0 = SystemClock.elapsedRealtime()
         try {
@@ -101,6 +89,71 @@ object InnerTube {
     fun like(videoId: String, remove: Boolean) {
         val body = JSONObject().put("target", JSONObject().put("videoId", videoId))
         post(if (remove) "like/removelike" else "like/like", body)
+    }
+
+    // the headers every call to music.youtube.com needs, plus the login cookie when there is one
+    private fun Request.Builder.withHeaders(): Request.Builder {
+        header("User-Agent", UA)
+        header("X-Goog-Api-Format-Version", "1")
+        header("X-YouTube-Client-Name", "67")
+        header("X-YouTube-Client-Version", CLIENT_VERSION)
+        header("X-Origin", ORIGIN)
+        header("Referer", "$ORIGIN/")
+        Session.visitorData?.let { header("X-Goog-Visitor-Id", it) }
+        Session.cookie?.let { cookie ->
+            header("Cookie", cookie)
+            Session.sapisid()?.let { s ->
+                val t = System.currentTimeMillis() / 1000
+                header("Authorization", "SAPISIDHASH ${t}_${sha1("$t $s $ORIGIN")}")
+            }
+        }
+        return this
+    }
+
+    // add one song to a playlist of the account (needs login)
+    fun addToPlaylist(playlistId: String, videoId: String) {
+        val action = JSONObject()
+            .put("action", "ACTION_ADD_VIDEO")
+            .put("addedVideoId", videoId)
+            .put("dedupeOption", "DEDUPE_OPTION_SKIP")
+        val body = JSONObject()
+            .put("playlistId", playlistId.removePrefix("VL"))
+            .put("actions", JSONArray().put(action))
+        val status = post("browse/edit_playlist", body).optString("status")
+        if (status != "STATUS_SUCCEEDED") throw IOException("youtube music answered '${status.ifEmpty { "nothing" }}'")
+    }
+
+    // new private playlist that already holds the song, returns its id
+    fun createPlaylist(title: String, videoId: String): String {
+        val body = JSONObject()
+            .put("title", title)
+            .put("description", "")
+            .put("privacyStatus", "PRIVATE")
+            .put("videoIds", JSONArray().put(videoId))
+        return post("playlist/create", body).optString("playlistId").ifEmpty { throw IOException("no playlist id in the answer") }
+    }
+
+    // The player plays raw stream urls, so youtube never hears about the play and the account history stays
+    // empty. Asking for the tracking url of the song and pinging it is what the web player does.
+    fun registerPlayback(videoId: String) {
+        if (!Session.loggedIn) return
+        val player = post("player", JSONObject().put("videoId", videoId).put("racyCheckOk", true).put("contentCheckOk", true))
+        val base = player.optJSONObject("playbackTracking")?.optJSONObject("videostatsPlaybackUrl")?.optString("baseUrl")
+            ?.takeIf { it.isNotEmpty() }
+        if (base == null) {
+            AppLog.w("InnerTube", "$videoId: no playback tracking url in the player answer, history not updated")
+            return
+        }
+        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+        val cpn = (1..16).map { chars.random() }.joinToString("")
+        val url = base.replace("https://s.youtube.com", ORIGIN).toHttpUrl().newBuilder()
+            .addQueryParameter("ver", "2")
+            .addQueryParameter("c", "WEB_REMIX")
+            .addQueryParameter("cpn", cpn)
+            .build()
+        http.newCall(Request.Builder().url(url).get().withHeaders().build()).execute().use { r ->
+            AppLog.i("InnerTube", "$videoId: playback registered, HTTP ${r.code}")
+        }
     }
 
     private fun sha1(s: String) = MessageDigest.getInstance("SHA-1")
