@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import lumi.sparkynox.lunomusic.MusicVM
+import lumi.sparkynox.lunomusic.ProfilePage
 import lumi.sparkynox.lunomusic.R
 import lumi.sparkynox.lunomusic.SettingsPage
 import lumi.sparkynox.lunomusic.StatsPage
@@ -114,6 +116,8 @@ fun Screen(vm: MusicVM) {
             FloatingNav(tab = vm.tab, proximity = proximity, onSelect = { vm.pages = emptyList(); vm.tab = it })
         }
 
+        vm.update?.let { UpdateDialog(vm, it) }
+
         AnimatedVisibility(
             visible = vm.showPlayer && hasMini,
             enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
@@ -132,7 +136,6 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 
 @Composable
 private fun HomeTab(vm: MusicVM) {
-    var menu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // load the next batch on its own once the user scrolls close to the end
@@ -159,20 +162,10 @@ private fun HomeTab(vm: MusicVM) {
                 RoundIcon(R.drawable.history, { vm.openHistory() })
                 RoundIcon(R.drawable.stats, { vm.push(StatsPage) })
                 RoundIcon(R.drawable.settings, { vm.push(SettingsPage) })
-                Box {
-                    RoundIcon(
-                        R.drawable.person,
-                        { if (vm.loggedIn) menu = true else vm.showLogin = true },
-                        container = if (vm.loggedIn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        tint = if (vm.loggedIn) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                    )
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Log out") }, onClick = { menu = false; vm.logout() },
-                            leadingIcon = { Icon(painterResource(R.drawable.logout), null) }
-                        )
-                    }
-                }
+                Avatar(
+                    vm, 40.dp,
+                    Modifier.clickable { if (vm.loggedIn) vm.push(ProfilePage) else vm.showLogin = true }
+                )
             }
         }
 

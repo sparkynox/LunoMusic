@@ -50,6 +50,7 @@ import lumi.sparkynox.lunomusic.ArtistPage
 import lumi.sparkynox.lunomusic.DetailPage
 import lumi.sparkynox.lunomusic.LogsPage
 import lumi.sparkynox.lunomusic.MusicVM
+import lumi.sparkynox.lunomusic.ProfilePage
 import lumi.sparkynox.lunomusic.R
 import lumi.sparkynox.lunomusic.SettingsPage
 import lumi.sparkynox.lunomusic.StatsPage
@@ -81,7 +82,8 @@ fun PageHost(vm: MusicVM) {
                     is SettingsPage -> SettingsScreen(vm)
                     is LogsPage -> LogsScreen(vm)
                     is StatsPage -> StatsScreen(vm)
-                    is AboutPage -> AboutScreen(onBack = vm::pop)
+                    is AboutPage -> AboutScreen(vm)
+                    is ProfilePage -> ProfileScreen(vm)
                 }
             }
         }

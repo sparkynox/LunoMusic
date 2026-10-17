@@ -252,3 +252,26 @@ fun ItemRow(item: HomeItem, onClick: () -> Unit) {
         Icon(painterResource(R.drawable.navigate_next), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+fun MusicVM.displayName(): String = customName.ifBlank { accountName.ifBlank { "Guest" } }
+
+// profile photo: the one picked from the gallery wins, then the youtube music photo, then the first letter
+@Composable
+fun Avatar(vm: MusicVM, size: Dp, modifier: Modifier = Modifier) {
+    val model: Any? = if (vm.customAvatar.isNotBlank()) java.io.File(vm.customAvatar) else vm.accountPhoto.ifBlank { null }
+    Box(
+        modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        if (model != null) {
+            AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            Text(
+                vm.displayName().take(1).uppercase(),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+                style = if (size > 80.dp) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+}

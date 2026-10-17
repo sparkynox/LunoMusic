@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import lumi.sparkynox.lunomusic.AboutPage
 import lumi.sparkynox.lunomusic.LogsPage
 import lumi.sparkynox.lunomusic.MusicVM
+import lumi.sparkynox.lunomusic.ProfilePage
 import lumi.sparkynox.lunomusic.R
 import lumi.sparkynox.lunomusic.StatsPage
 import lumi.sparkynox.lunomusic.data.Downloads
@@ -47,6 +48,7 @@ import lumi.sparkynox.lunomusic.util.Prefs
 fun SettingsScreen(vm: MusicVM) {
     var ytFirst by remember { mutableStateOf(Prefs.ytdlpFirst) }
     var verbose by remember { mutableStateOf(Prefs.verboseLogs) }
+    var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate) }
     var confirm by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 200.dp)) {
@@ -56,6 +58,7 @@ fun SettingsScreen(vm: MusicVM) {
         }
 
         Group("Account") {
+            ClickRow(R.drawable.person, "Profile", vm.displayName() + if (vm.bio.isNotBlank()) " • ${vm.bio.take(40)}" else "") { vm.push(ProfilePage) }
             ClickRow(
                 R.drawable.account,
                 if (vm.loggedIn) "Log out" else "Log in with Google",
@@ -105,6 +108,14 @@ fun SettingsScreen(vm: MusicVM) {
                 AppLog.i("Settings", "verbose logging = $it")
             }
             ClickRow(R.drawable.list, "Logs", "Everything the app did, from the first line to the latest") { vm.push(LogsPage) }
+        }
+
+        Group("Updates") {
+            SwitchRow(R.drawable.update, "Check for updates automatically", "Looks for a new release when the app starts", autoUpdate) {
+                autoUpdate = it
+                Prefs.autoUpdate = it
+            }
+            ClickRow(R.drawable.sync, "Check for updates now", vm.updateStatus.ifBlank { "Download and install new versions without leaving the app" }) { vm.checkUpdate(true) }
         }
 
         Group("About") {
