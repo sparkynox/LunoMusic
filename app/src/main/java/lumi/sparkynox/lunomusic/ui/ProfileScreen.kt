@@ -106,7 +106,7 @@ fun ProfileScreen(vm: MusicVM) {
                 Text("Bio", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 12.dp))
                 TextField(
                     value = vm.bio,
-                    onValueChange = vm::setBio,
+                    onValueChange = { vm.bio = it },
                     placeholder = { Text("Tell people about your taste in music") },
                     minLines = 2,
                     maxLines = 5,
@@ -119,11 +119,13 @@ fun ProfileScreen(vm: MusicVM) {
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    "${vm.bio.length}/200", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.End).padding(end = 12.dp)
-                )
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        "${vm.bio.length}/200", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
             }
         }
 
@@ -164,9 +166,9 @@ fun ProfileScreen(vm: MusicVM) {
                     Text("Only shown inside LunoMusic", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            confirmButton = { TextButton(onClick = { vm.setCustomName(draft); editName = false }) { Text("Save") } },
+            confirmButton = { TextButton(onClick = { vm.customName = draft; editName = false }) { Text("Save") } },
             dismissButton = {
-                TextButton(onClick = { vm.setCustomName(""); editName = false }) { Text("Reset") }
+                TextButton(onClick = { vm.customName = ""; editName = false }) { Text("Reset") }
             }
         )
     }
