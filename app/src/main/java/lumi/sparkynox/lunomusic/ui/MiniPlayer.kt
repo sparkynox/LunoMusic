@@ -78,10 +78,9 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
         while (true) {
             position = vm.position()
             duration = vm.duration()
-            delay(if (vm.playing) 300 else 900)
+            delay(if (vm.playing) 400 else 900)
         }
     }
-    val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
 
     val shape = RoundedCornerShape(
         topStart = lerp(FloatingBarStandaloneCornerRadius.value, FloatingBarOuterCornerRadius.value, proximity).dp,
@@ -123,7 +122,7 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(52.dp)) {
                     CircularWavyProgressIndicator(
-                        progress = { progress },
+                        progress = { if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f },
                         modifier = Modifier.fillMaxSize(),
                         color = scheme.primary,
                         trackColor = scheme.outline.copy(alpha = 0.18f),
