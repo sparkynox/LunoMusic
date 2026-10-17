@@ -13,6 +13,7 @@ object SettingsPage : Page()
 object LogsPage : Page()
 object StatsPage : Page()
 object AboutPage : Page()
+object ProfilePage : Page()
 
 // album, playlist, liked songs, history, downloads, top 50
 class DetailPage(

@@ -2,6 +2,8 @@ package lumi.sparkynox.lunomusic
 
 import android.app.Application
 import android.content.ComponentName
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.runtime.getValue
@@ -26,6 +28,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import lumi.sparkynox.lunomusic.auth.Session
 import lumi.sparkynox.lunomusic.data.Downloads
+import lumi.sparkynox.lunomusic.data.UpdateInfo
+import lumi.sparkynox.lunomusic.data.Updater
 import lumi.sparkynox.lunomusic.data.Stats
 import lumi.sparkynox.lunomusic.extract.Chip
 import lumi.sparkynox.lunomusic.extract.Extractor
@@ -40,6 +44,8 @@ import lumi.sparkynox.lunomusic.extract.SearchFilter
 import lumi.sparkynox.lunomusic.extract.Track
 import lumi.sparkynox.lunomusic.util.AppLog
 import lumi.sparkynox.lunomusic.util.Prefs
+import java.io.File
+import java.io.IOException
 
 class MusicVM(app: Application) : AndroidViewModel(app) {
     var tab by mutableIntStateOf(0)
@@ -64,6 +70,21 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     var libPlaylists by mutableStateOf<List<HomeItem>>(emptyList())
     var libLoading by mutableStateOf(false)
     var likedIds by mutableStateOf<Set<String>>(emptySet())
+
+    // profile
+    var accountName by mutableStateOf(Prefs.accountName)
+    var accountHandle by mutableStateOf(Prefs.accountHandle)
+    var accountEmail by mutableStateOf(Prefs.accountEmail)
+    var accountPhoto by mutableStateOf(Prefs.accountPhoto)
+    var customName by mutableStateOf(Prefs.customName)
+    var customAvatar by mutableStateOf(Prefs.customAvatar)
+    var bio by mutableStateOf(Prefs.bio)
+
+    // in app updates
+    var update by mutableStateOf<UpdateInfo?>(null)
+    var updateProgress by mutableStateOf<Float?>(null)
+    var updateStatus by mutableStateOf("")
+    var updateChecking by mutableStateOf(false)
 
     var nowPlaying by mutableStateOf<MediaMetadata?>(null)
     var playing by mutableStateOf(false)
@@ -142,6 +163,8 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
         loadHome()
         loadLiked()
+        loadAccount()
+        if (Prefs.autoUpdate && System.currentTimeMillis() - Prefs.lastUpdateCheck > 6 * 3600_000L) checkUpdate(false)
     }
 
     private fun fail(tag: String, msg: String, e: Exception): String {
@@ -280,12 +303,15 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         showLogin = false
         loggedIn = true
         resetHome()
+        loadAccount()
     }
 
     fun logout() {
         AppLog.i("Login", "logged out")
         Session.logout()
         loggedIn = false
+        accountName = ""; accountHandle = ""; accountEmail = ""; accountPhoto = ""
+        Prefs.accountName = ""; Prefs.accountHandle = ""; Prefs.accountEmail = ""; Prefs.accountPhoto = ""
         resetHome()
     }
 
@@ -646,6 +672,130 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 lyricsState = if (lines.isEmpty()) "none" else ""
             }
         }
+    }
+
+    // ---------- profile
+
+    fun loadAccount() {
+        if (!Session.loggedIn) return
+        viewModelScope.launch {
+            try {
+                val a = withContext(Dispatchers.IO) { Feed.account() } ?: return@launch
+                accountName = a.name; accountHandle = a.handle ?: ""; accountEmail = a.email ?: ""; accountPhoto = a.photo ?: ""
+                Prefs.accountName = accountName; Prefs.accountHandle = accountHandle
+                Prefs.accountEmail = accountEmail; Prefs.accountPhoto = accountPhoto
+                AppLog.i("Profile", "account loaded: ${a.name} ${a.handle ?: ""}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.w("Profile", "couldn't load the account info", e)
+            }
+        }
+    }
+
+    fun setBio(v: String) {
+        bio = v.take(200)
+        Prefs.bio = bio
+    }
+
+    fun setCustomName(v: String) {
+        customName = v.trim().take(40)
+        Prefs.customName = customName
+    }
+
+    fun setAvatarFrom(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val path = withContext(Dispatchers.IO) { saveAvatar(uri) }
+                if (customAvatar.isNotBlank()) File(customAvatar).delete()
+                customAvatar = path
+                Prefs.customAvatar = path
+                AppLog.i("Profile", "new profile photo saved")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = fail("Profile", "couldn't use that photo", e)
+            }
+        }
+    }
+
+    fun resetAvatar() {
+        if (customAvatar.isNotBlank()) File(customAvatar).delete()
+        customAvatar = ""
+        Prefs.customAvatar = ""
+    }
+
+    // shrinks the picked photo so it doesn't sit on the disk at full size
+    private fun saveAvatar(uri: Uri): String {
+        val app = getApplication<Application>()
+        val cr = app.contentResolver
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+        val bmp = cr.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: throw IOException("couldn't read that image")
+        val out = File(app.filesDir, "avatar_${System.currentTimeMillis()}.jpg")
+        out.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        return out.absolutePath
+    }
+
+    // ---------- updates
+
+    fun checkUpdate(manual: Boolean) {
+        if (updateChecking) return
+        viewModelScope.launch {
+            updateChecking = true
+            if (manual) updateStatus = "Checking..."
+            try {
+                val cur = Updater.currentVersion(getApplication())
+                val info = withContext(Dispatchers.IO) { Updater.check(cur) }
+                Prefs.lastUpdateCheck = System.currentTimeMillis()
+                when {
+                    info == null -> updateStatus = "You're on the latest version ($cur)"
+                    !manual && info.version == Prefs.skippedVersion -> {
+                        updateStatus = "Update v${info.version} available (skipped)"
+                    }
+                    else -> {
+                        update = info
+                        updateStatus = "Update available: v${info.version}"
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.w("Update", "update check failed", e)
+                if (manual) updateStatus = "Couldn't check for updates (${e.message})"
+            }
+            updateChecking = false
+        }
+    }
+
+    fun startUpdate() {
+        val info = update ?: return
+        if (updateProgress != null) return
+        viewModelScope.launch {
+            updateProgress = 0f
+            try {
+                val apk = withContext(Dispatchers.IO) { Updater.download(getApplication(), info) { p -> updateProgress = p } }
+                updateProgress = null
+                if (!Updater.install(getApplication(), apk)) {
+                    updateStatus = "Allow installs from LunoMusic in the settings page that opened, then tap Update again"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateProgress = null
+                updateStatus = "Download failed (${e.message})"
+                AppLog.e("Update", "download or install failed", e)
+            }
+        }
+    }
+
+    fun dismissUpdate(skip: Boolean) {
+        if (skip) Prefs.skippedVersion = update?.version ?: ""
+        update = null
     }
 
     override fun onCleared() {
