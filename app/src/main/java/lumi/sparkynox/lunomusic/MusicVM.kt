@@ -47,6 +47,9 @@ import lumi.sparkynox.lunomusic.util.Prefs
 import java.io.File
 import java.io.IOException
 
+// the small bar at the bottom: a message, with an Undo button when there is something to take back
+class Notice(val message: String, val undo: (() -> Unit)? = null)
+
 class MusicVM(app: Application) : AndroidViewModel(app) {
     var tab by mutableIntStateOf(0)
     var showLogin by mutableStateOf(false)
@@ -102,6 +105,13 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     var lyrics by mutableStateOf<List<LyricLine>>(emptyList())
     var lyricsState by mutableStateOf("")
+
+    var notice by mutableStateOf<Notice?>(null)
+        private set
+
+    // song the "add to playlist" sheet is open for, null = sheet closed
+    var playlistTarget by mutableStateOf<Track?>(null)
+        private set
 
     private var controller: MediaController? = null
     private var extending = false
@@ -219,20 +229,50 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     // ---------- not interested: block a song everywhere
 
+    fun showNotice(message: String, undo: (() -> Unit)? = null) {
+        notice = Notice(message, undo)
+    }
+
+    fun runUndo() {
+        val n = notice ?: return
+        notice = null
+        n.undo?.invoke()
+    }
+
+    fun dismissNotice() {
+        notice = null
+    }
+
     fun notInterested(id: String, title: String) {
         if (id.isBlank()) return
+        // remember what is about to disappear so Undo can put it all back
+        val gone = ArrayList<Pair<Int, MediaItem>>()
+        controller?.let { c ->
+            for (i in 0 until c.mediaItemCount) if (c.getMediaItemAt(i).mediaId == id) gone += i to c.getMediaItemAt(i)
+        }
+        val homeBefore = home
+        val homeContBefore = homeCont
+        val resultsBefore = results
+        val queryBefore = query
+
         blockedIds = blockedIds + id
         Prefs.blockedIds = blockedIds
-        controller?.let { c ->
-            var i = c.mediaItemCount - 1
-            while (i >= 0) {
-                if (c.getMediaItemAt(i).mediaId == id) c.removeMediaItem(i)
-                i--
-            }
-        }
+        controller?.let { c -> gone.asReversed().forEach { (i, _) -> c.removeMediaItem(i) } }
         home = home.map { s -> s.copy(items = s.items.filter { it.videoId != id }) }
         results = results.filter { it.videoId != id }
         AppLog.i("VM", "not interested in '$title' ($id), ${blockedIds.size} hidden total")
+
+        showNotice("Hidden: ${title.ifBlank { "song" }}") {
+            blockedIds = blockedIds - id
+            Prefs.blockedIds = blockedIds
+            controller?.let { c ->
+                gone.forEach { (i, item) -> c.addMediaItem(i.coerceAtMost(c.mediaItemCount), item) }
+            }
+            // only put the lists back when nothing was loaded on top of them in the meantime
+            if (homeCont == homeContBefore) home = homeBefore
+            if (query == queryBefore) results = resultsBefore
+            AppLog.i("VM", "undo: '$title' ($id) is visible again")
+        }
     }
 
     fun notInterested(index: Int) {
@@ -424,9 +464,21 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun openHistory() {
-        val page = DetailPage("History", "Recently played on YouTube Music", null)
+        val page = DetailPage("History", "Recently played", null)
         push(page)
-        loadPage(page, "History") { Feed.history() }
+        loadPage(page, "History") { history() }
+    }
+
+    // what was played on this device first, then what the youtube music account has, every song once
+    private fun history(): List<Track> {
+        val local = Stats.recent(200)
+        val remote = if (Session.loggedIn) {
+            runCatching { Feed.history() }
+                .onFailure { AppLog.w("History", "couldn't load the youtube music history", it) }
+                .getOrDefault(emptyList())
+        } else emptyList()
+        val seen = HashSet<String>()
+        return (local + remote).filter { seen.add(it.id) }
     }
 
     fun openDownloads() {
@@ -563,9 +615,68 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun removeFromQueue(index: Int) {
         val c = controller ?: return
-        if (index in 0 until c.mediaItemCount) {
-            AppLog.i("VM", "removed #$index '${c.getMediaItemAt(index).mediaMetadata.title}' from the queue")
-            c.removeMediaItem(index)
+        if (index !in 0 until c.mediaItemCount) return
+        val item = c.getMediaItemAt(index)
+        val title = item.mediaMetadata.title?.toString() ?: ""
+        AppLog.i("VM", "removed #$index '$title' from the queue")
+        c.removeMediaItem(index)
+        showNotice("Removed from queue") {
+            controller?.let { q -> q.addMediaItem(index.coerceAtMost(q.mediaItemCount), item) }
+            AppLog.i("VM", "undo: '$title' is back in the queue at #$index")
+        }
+    }
+
+    // ---------- add to playlist
+
+    fun openAddToPlaylist(t: Track) {
+        if (!loggedIn) {
+            showLogin = true
+            return
+        }
+        playlistTarget = t
+        loadLibrary()
+    }
+
+    fun closeAddToPlaylist() {
+        playlistTarget = null
+    }
+
+    fun addToPlaylist(playlist: HomeItem) {
+        val t = playlistTarget ?: return
+        val pid = playlist.playlistId ?: return
+        playlistTarget = null
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { InnerTube.addToPlaylist(pid, t.id) }
+                AppLog.i("Playlist", "'${t.title}' added to '${playlist.title}'")
+                showNotice("Saved to ${playlist.title}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e("Playlist", "couldn't add '${t.title}' to '${playlist.title}'", e)
+                showNotice("Couldn't add to ${playlist.title}")
+            }
+        }
+    }
+
+    fun createPlaylistWith(name: String) {
+        val t = playlistTarget ?: return
+        val title = name.trim().take(100)
+        if (title.isEmpty()) return
+        playlistTarget = null
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { InnerTube.createPlaylist(title, t.id) }
+                AppLog.i("Playlist", "created '$title' with '${t.title}'")
+                showNotice("Saved to new playlist $title")
+                libPlaylists = emptyList()
+                loadLibrary()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e("Playlist", "couldn't create '$title'", e)
+                showNotice("Couldn't create the playlist")
+            }
         }
     }
 

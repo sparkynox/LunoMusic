@@ -1,6 +1,8 @@
 package lumi.sparkynox.lunomusic
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -17,16 +19,28 @@ import androidx.media3.session.MediaSessionService
 import lumi.sparkynox.lunomusic.data.Downloads
 import lumi.sparkynox.lunomusic.data.Stats
 import lumi.sparkynox.lunomusic.extract.Extractor
+import lumi.sparkynox.lunomusic.extract.InnerTube
 import lumi.sparkynox.lunomusic.util.AppLog
+import lumi.sparkynox.lunomusic.util.HqBitmapLoader
+
+private const val MIN_LISTEN_MS = 15_000L
 
 class PlayerService : MediaSessionService() {
     private var session: MediaSession? = null
     private val retries = mutableMapOf<String, Int>()
 
-    // listening stats for the current item
+    // listening stats for the current item. The play is saved as soon as it counts (MIN_LISTEN_MS), after that
+    // only the listened time of the same row is topped up, so a song that is still playing shows in History
     private var curItem: MediaItem? = null
     private var playStart = 0L
     private var listened = 0L
+    private var rowId = -1L
+    private var savedMs = 0L
+    private val handler = Handler(Looper.getMainLooper())
+    private val thresholdCheck = Runnable {
+        flushStats()
+        if (rowId < 0 && playStart > 0) scheduleThreshold()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -78,17 +92,26 @@ class PlayerService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     playStart = SystemClock.elapsedRealtime()
-                } else if (playStart > 0) {
-                    listened += SystemClock.elapsedRealtime() - playStart
-                    playStart = 0
+                    scheduleThreshold()
+                } else {
+                    handler.removeCallbacks(thresholdCheck)
+                    if (playStart > 0) {
+                        listened += SystemClock.elapsedRealtime() - playStart
+                        playStart = 0
+                    }
+                    flushStats()
                 }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                commitStats()
+                handler.removeCallbacks(thresholdCheck)
+                flushStats()
                 curItem = mediaItem
                 listened = 0
+                rowId = -1L
+                savedMs = 0
                 playStart = if (player.isPlaying) SystemClock.elapsedRealtime() else 0
+                if (playStart > 0) scheduleThreshold()
                 AppLog.i("Player", "now playing ${mediaItem?.mediaId} '${mediaItem?.mediaMetadata?.title}' (reason=$reason, queue=${player.mediaItemCount})")
             }
 
@@ -108,27 +131,46 @@ class PlayerService : MediaSessionService() {
             }
         })
 
-        session = MediaSession.Builder(this, player).build()
+        session = MediaSession.Builder(this, player).setBitmapLoader(HqBitmapLoader(this)).build()
     }
 
-    private fun commitStats() {
+    private fun listenedNow() = listened + if (playStart > 0) SystemClock.elapsedRealtime() - playStart else 0L
+
+    private fun scheduleThreshold() {
+        handler.removeCallbacks(thresholdCheck)
+        if (rowId < 0) handler.postDelayed(thresholdCheck, (MIN_LISTEN_MS - listenedNow()).coerceAtLeast(0L) + 50)
+    }
+
+    private fun flushStats() {
         val item = curItem ?: return
-        var total = listened
-        if (playStart > 0) total += SystemClock.elapsedRealtime() - playStart
-        if (total >= 15_000) {
-            val m = item.mediaMetadata
-            runCatching {
+        val total = listenedNow()
+        val m = item.mediaMetadata
+        if (rowId < 0) {
+            if (total < MIN_LISTEN_MS) return
+            rowId = runCatching {
                 Stats.record(item.mediaId, m.title?.toString() ?: "", m.artist?.toString() ?: "", m.artworkUri?.toString(), total)
-            }.onFailure { AppLog.e("Stats", "couldn't record play", it) }
+            }.onFailure { AppLog.e("Stats", "couldn't record play", it) }.getOrDefault(-1L)
+            savedMs = total
+            if (rowId >= 0) syncHistory(item.mediaId)
+        } else if (total > savedMs) {
+            runCatching { Stats.setTime(rowId, total) }.onFailure { AppLog.e("Stats", "couldn't update listened time", it) }
+            savedMs = total
         }
-        listened = 0
-        if (playStart > 0) playStart = SystemClock.elapsedRealtime()
+    }
+
+    // lets the youtube music account know about the play, off the main thread, a failure only costs the history entry there
+    private fun syncHistory(id: String) {
+        Thread {
+            runCatching { InnerTube.registerPlayback(id) }
+                .onFailure { AppLog.w("History", "couldn't register the play of $id with youtube music", it) }
+        }.start()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
     override fun onDestroy() {
-        commitStats()
+        handler.removeCallbacks(thresholdCheck)
+        flushStats()
         session?.run {
             player.release()
             release()
