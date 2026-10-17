@@ -6,7 +6,9 @@ Streams come from the BravePipe extractor. When it breaks (YouTube changes somet
 
 ## Features
 
-- Google login (YT Music) and your own personalised home feed with mood chips
+- Google login (YT Music) and your own personalised home feed with mood chips, loads more as you scroll
+- Profile: your YT Music photo and name, a bio, or a photo from your gallery
+- In app updates: finds the newest release on GitHub, downloads and installs it without opening the browser
 - Full screen player: blurred artwork, seek bar, synced lyrics, queue, shuffle, repeat, sleep timer, like button
 - Queue: swipe a song away or hit the cross to remove it
 - Endless queue: when the queue runs low it keeps going with the YouTube Music radio of the current song
@@ -53,6 +55,10 @@ Locally you need JDK 17, Python 3.11 on your PATH (Chaquopy needs it at build ti
 - [LRCLIB](https://lrclib.net): synced lyrics
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Chaquopy](https://chaquo.com/chaquopy/)
+
+## Releasing
+
+Every push to `main` builds a signed APK and publishes it as a GitHub release named after `versionName` in `app/build.gradle.kts`. The app checks the latest release for updates, so bump `versionCode` and `versionName` before pushing a new version. Edit the release notes on GitHub, they show up in the in app update dialog.
 
 ## Contributing
 
