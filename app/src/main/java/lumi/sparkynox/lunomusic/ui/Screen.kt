@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -44,6 +45,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -131,8 +133,21 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 @Composable
 private fun HomeTab(vm: MusicVM) {
     var menu by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = listPad) {
+    // load the next batch on its own once the user scrolls close to the end
+    val nearEnd by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 4
+        }
+    }
+    LaunchedEffect(nearEnd, vm.homeCont, vm.homeLoading) {
+        if (nearEnd && vm.homeCont != null && !vm.homeLoading) vm.loadHome(more = true)
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = listPad) {
         item {
             Row(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
@@ -197,7 +212,7 @@ private fun HomeTab(vm: MusicVM) {
             }
         }
 
-        if (vm.homeLoading) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
+        if (vm.homeLoading && vm.home.isEmpty()) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
         vm.error?.let {
             item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
         }
@@ -207,12 +222,8 @@ private fun HomeTab(vm: MusicVM) {
             else CarouselSection(vm, sec)
         }
 
-        if (vm.homeCont != null && !vm.homeLoading) {
-            item {
-                TextButton(onClick = { vm.loadHome(more = true) }, modifier = Modifier.padding(16.dp)) {
-                    Text("Load more")
-                }
-            }
+        if (vm.homeLoading && vm.home.isNotEmpty()) {
+            item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(24.dp)) }
         }
     }
 }
