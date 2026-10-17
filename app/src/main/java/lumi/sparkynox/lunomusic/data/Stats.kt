@@ -7,13 +7,32 @@ import lumi.sparkynox.lunomusic.util.AppLog
 class Play(val id: String, val title: String, val artist: String, val thumb: String?, val ts: Long, val ms: Long)
 
 object Stats {
-    fun record(id: String, title: String, artist: String, thumb: String?, ms: Long) {
+    // returns the row id so the listened time can be topped up while the song keeps playing
+    fun record(id: String, title: String, artist: String, thumb: String?, ms: Long): Long {
         val v = ContentValues().apply {
             put("id", id); put("title", title); put("artist", artist); put("thumb", thumb)
             put("ts", System.currentTimeMillis()); put("ms", ms)
         }
-        Db.db.insert("plays", null, v)
+        val row = Db.db.insert("plays", null, v)
         AppLog.i("Stats", "recorded '$title' listened ${ms / 1000}s")
+        return row
+    }
+
+    fun setTime(row: Long, ms: Long) {
+        val v = ContentValues().apply { put("ms", ms) }
+        Db.db.update("plays", v, "rowid=?", arrayOf(row.toString()))
+    }
+
+    // local history: every song once, newest play first
+    fun recent(n: Int): List<Track> {
+        val out = ArrayList<Track>()
+        Db.db.rawQuery(
+            "SELECT id,title,artist,thumb,MAX(ts) t FROM plays GROUP BY id ORDER BY t DESC LIMIT ?",
+            arrayOf(n.toString())
+        ).use { c ->
+            while (c.moveToNext()) out.add(Track(c.getString(0), c.getString(1), c.getString(2), c.getString(3), 0L))
+        }
+        return out
     }
 
     fun since(from: Long): List<Play> {
