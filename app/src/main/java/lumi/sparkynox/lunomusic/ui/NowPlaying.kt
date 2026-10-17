@@ -21,6 +21,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
@@ -106,6 +110,7 @@ import lumi.sparkynox.lunomusic.MusicVM
 import lumi.sparkynox.lunomusic.R
 import lumi.sparkynox.lunomusic.data.Downloads
 import lumi.sparkynox.lunomusic.extract.Extractor
+import lumi.sparkynox.lunomusic.util.Img
 import lumi.sparkynox.lunomusic.ui.at.V9AnimatedPlaybackControls
 import lumi.sparkynox.lunomusic.ui.at.WavySliderExpressive
 
@@ -156,12 +161,7 @@ fun NowPlaying(vm: MusicVM) {
                                 targetState = meta?.artworkUri,
                                 transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
                                 label = "playerArt"
-                            ) { art ->
-                                AsyncImage(
-                                    model = art, contentDescription = null, contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                            ) { art -> PlayerArt(art?.toString()) }
                             Box(
                                 Modifier.fillMaxSize().background(
                                     Brush.verticalGradient(
@@ -206,6 +206,12 @@ fun NowPlaying(vm: MusicVM) {
                             }
                         )
                     }
+                    RoundIcon(
+                        R.drawable.playlist_add,
+                        { vm.currentTrack()?.let { vm.openAddToPlaylist(it) } },
+                        size = 48.dp, iconSize = 22.dp,
+                        container = Color.White.copy(alpha = 0.14f), tint = Color.White
+                    )
                     val likeBg by animateColorAsState(
                         if (liked) scheme.primaryContainer else Color.White.copy(alpha = 0.14f), label = "likeBg"
                     )
@@ -301,6 +307,19 @@ fun NowPlaying(vm: MusicVM) {
             }
         }
     }
+}
+
+// full screen artwork: asks for the biggest version, if that one fails to load the original url is used
+@Composable
+private fun PlayerArt(url: String?) {
+    var plain by remember(url) { mutableStateOf(false) }
+    AsyncImage(
+        model = if (plain) url else Img.best(url),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        onError = { plain = true },
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 @Composable
@@ -590,24 +609,11 @@ private fun LyricLine(text: String, dist: Int, startMs: Long, endMs: Long, pos: 
 
     val target = if (active) ((pos() - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1L)).coerceIn(0f, 1f) else 0f
     val fill by animateFloatAsState(target, tween(160, easing = LinearEasing), label = "lyricFill")
-    val edge = fill.coerceIn(0f, 0.9f)
 
-    val base = TextStyle(
-        fontSize = 28.sp,
-        lineHeight = 37.sp,
-        fontWeight = FontWeight.Bold,
-        shadow = Shadow(Color.White.copy(alpha = 0.6f * glow), Offset.Zero, 34f * glow + 0.1f)
-    )
-    val style = if (active) {
-        base.copy(
-            brush = Brush.horizontalGradient(
-                0f to Color.White,
-                edge to Color.White,
-                edge + 0.1f to Color.White.copy(alpha = 0.5f),
-                1f to Color.White.copy(alpha = 0.5f)
-            )
-        )
-    } else base.copy(color = Color.White)
+    val base = TextStyle(fontSize = 28.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold)
+    val glowShadow = Shadow(Color.White.copy(alpha = 0.6f * glow), Offset.Zero, 34f * glow + 0.1f)
+    val feather = with(LocalDensity.current) { 28.dp.toPx() }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Box(
         Modifier
@@ -622,6 +628,49 @@ private fun LyricLine(text: String, dist: Int, startMs: Long, endMs: Long, pos: 
             .alpha(alpha)
             .then(if (blur > 0.dp) Modifier.blur(blur, BlurredEdgeTreatment.Unbounded) else Modifier)
     ) {
-        Text(text, style = style)
+        if (active) {
+            // A brush over the whole text gives every wrapped line the same fill at the same time. So: a dim copy of the
+            // text underneath, and on top a bright copy where the part that isn't sung yet is erased, line by line in
+            // reading order. The first line fills up completely before the second one starts.
+            Text(text, style = base.copy(color = Color.White.copy(alpha = 0.5f), shadow = glowShadow), onTextLayout = { layout = it })
+            Text(
+                text, style = base.copy(color = Color.White),
+                modifier = Modifier
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        layout?.let { eraseUnsung(it, fill, feather) }
+                    }
+            )
+        } else {
+            Text(text, style = base.copy(color = Color.White, shadow = glowShadow))
+        }
+    }
+}
+
+// wipes the not yet sung part of the bright text. fill is 0..1 over the width of all the lines together
+private fun DrawScope.eraseUnsung(layout: TextLayoutResult, fill: Float, feather: Float) {
+    val n = layout.lineCount
+    if (n == 0) return
+    val widths = FloatArray(n) { (layout.getLineRight(it) - layout.getLineLeft(it)).coerceAtLeast(0f) }
+    var left = fill.coerceIn(0f, 1f) * widths.sum()
+    for (i in 0 until n) {
+        val w = widths[i]
+        val filled = left.coerceIn(0f, w)
+        left -= w
+        if (filled >= w) continue
+        val top = layout.getLineTop(i)
+        val h = layout.getLineBottom(i) - top
+        if (filled <= 0f) {
+            drawRect(Color.Transparent, Offset(0f, top), Size(size.width, h), blendMode = BlendMode.DstIn)
+            continue
+        }
+        val edge = layout.getLineLeft(i) + filled
+        drawRect(
+            Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = edge, endX = edge + feather),
+            Offset(edge, top), Size(feather, h), blendMode = BlendMode.DstIn
+        )
+        val rest = size.width - edge - feather
+        if (rest > 0f) drawRect(Color.Transparent, Offset(edge + feather, top), Size(rest, h), blendMode = BlendMode.DstIn)
     }
 }

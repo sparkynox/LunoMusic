@@ -207,6 +207,10 @@ fun TrackRow(
                     leadingIcon = { Icon(painterResource(R.drawable.queue_music), null) }
                 )
                 DropdownMenuItem(
+                    text = { Text("Add to playlist") }, onClick = { menu = false; vm.openAddToPlaylist(t) },
+                    leadingIcon = { Icon(painterResource(R.drawable.playlist_add), null) }
+                )
+                DropdownMenuItem(
                     text = { Text("Not interested") }, onClick = { menu = false; vm.notInterested(t.id, t.title) },
                     leadingIcon = { Icon(painterResource(R.drawable.block), null) }
                 )

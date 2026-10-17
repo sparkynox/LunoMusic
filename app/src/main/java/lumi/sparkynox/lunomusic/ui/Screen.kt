@@ -123,6 +123,12 @@ fun Screen(vm: MusicVM) {
             enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
             exit = slideOutVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeOut()
         ) { NowPlaying(vm) }
+
+        AddToPlaylistSheet(vm)
+        NoticeBar(
+            vm,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = if (vm.showPlayer && hasMini) 72.dp else 160.dp)
+        )
     }
 }
 

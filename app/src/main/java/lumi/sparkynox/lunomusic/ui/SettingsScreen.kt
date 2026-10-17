@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ import lumi.sparkynox.lunomusic.data.Downloads
 import lumi.sparkynox.lunomusic.data.Stats
 import lumi.sparkynox.lunomusic.extract.Extractor
 import lumi.sparkynox.lunomusic.util.AppLog
+import lumi.sparkynox.lunomusic.util.Battery
 import lumi.sparkynox.lunomusic.util.Prefs
 
 @Composable
@@ -50,6 +52,7 @@ fun SettingsScreen(vm: MusicVM) {
     var verbose by remember { mutableStateOf(Prefs.verboseLogs) }
     var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate) }
     var confirm by remember { mutableStateOf<String?>(null) }
+    val ctx = LocalContext.current
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 200.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -85,6 +88,13 @@ fun SettingsScreen(vm: MusicVM) {
                 Extractor.clearCache()
                 AppLog.i("Settings", "yt-dlp first = $it")
             }
+        }
+
+        Group("Background playback") {
+            ClickRow(
+                R.drawable.bolt, "Ignore battery optimizations",
+                if (Battery.exempt(ctx)) "Allowed, music keeps playing with the screen off" else "Not allowed yet, Android may stop the music in the background"
+            ) { Battery.request(ctx) }
         }
 
         Group("Downloads") {
