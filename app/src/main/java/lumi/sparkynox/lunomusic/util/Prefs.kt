@@ -75,4 +75,9 @@ object Prefs {
     var skippedVersion: String
         get() = sp.getString("skipped_version", "") ?: ""
         set(v) = sp.edit().putString("skipped_version", v).apply()
+
+    // the battery optimization prompt stays quiet until this time after the user said "not now"
+    var batteryAskAfter: Long
+        get() = sp.getLong("battery_ask_after", 0L)
+        set(v) = sp.edit().putLong("battery_ask_after", v).apply()
 }
