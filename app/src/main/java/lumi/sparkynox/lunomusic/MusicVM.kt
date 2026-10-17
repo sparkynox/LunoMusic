@@ -205,7 +205,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             try {
                 val more = withContext(Dispatchers.IO) { Feed.queue("RDAMVM$seed", seed) }
                 val have = (0 until c.mediaItemCount).map { c.getMediaItemAt(it).mediaId }.toSet()
-                // smart queue: never re-add songs already in the queue or marked "not interested"
                 val fresh = more.filter { it.id !in have && it.id !in blockedIds }
                 if (fresh.isNotEmpty()) c.addMediaItems(fresh.map { it.toItem() })
                 AppLog.i("Endless", "radio for $seed: ${more.size} songs, ${fresh.size} new added")
@@ -224,7 +223,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         if (id.isBlank()) return
         blockedIds = blockedIds + id
         Prefs.blockedIds = blockedIds
-        // drop every copy of it from the queue
         controller?.let { c ->
             var i = c.mediaItemCount - 1
             while (i >= 0) {
@@ -232,7 +230,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 i--
             }
         }
-        // hide it from what's on screen right now
         home = home.map { s -> s.copy(items = s.items.filter { it.videoId != id }) }
         results = results.filter { it.videoId != id }
         AppLog.i("VM", "not interested in '$title' ($id), ${blockedIds.size} hidden total")
@@ -263,7 +260,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 val page = withContext(Dispatchers.IO) {
                     Feed.home(if (more) homeCont else null, if (more) null else chip)
                 }
-                // keep "not interested" songs out of the feed
                 val sections = page.sections
                     .map { s -> s.copy(items = s.items.filter { it.videoId == null || it.videoId !in blockedIds }) }
                     .filter { it.items.isNotEmpty() }
@@ -406,7 +402,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     // ---------- pages
 
-    // album / playlist / artist cards
     fun openItem(item: HomeItem) {
         when (item.kind) {
             Kind.ALBUM, Kind.PLAYLIST -> openDetail(item)
@@ -517,8 +512,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         if (songs.isNotEmpty()) playTracks(songs.map { it.toTrack() }, 0)
     }
 
-    // a song picked from search or a feed shelf plays on its own, its radio fills the queue (endless queue)
-    // instead of dumping the whole result list into it
     fun playSong(t: Track) = playTracks(listOf(t), 0)
 
     fun playTracks(tracks: List<Track>, index: Int, shuffled: Boolean = false) {
@@ -527,7 +520,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
             return
         }
         if (tracks.isEmpty()) return
-        // smart queue: never start a list containing "not interested" songs
         val playable = tracks.filter { it.id !in blockedIds }
         if (playable.isEmpty()) {
             error = "nothing to play"
@@ -693,12 +685,12 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setBio(v: String) {
+    fun updateBio(v: String) {
         bio = v.take(200)
         Prefs.bio = bio
     }
 
-    fun setCustomName(v: String) {
+    fun updateCustomName(v: String) {
         customName = v.trim().take(40)
         Prefs.customName = customName
     }
@@ -725,7 +717,6 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         Prefs.customAvatar = ""
     }
 
-    // shrinks the picked photo so it doesn't sit on the disk at full size
     private fun saveAvatar(uri: Uri): String {
         val app = getApplication<Application>()
         val cr = app.contentResolver
