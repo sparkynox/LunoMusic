@@ -373,10 +373,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun openResult(item: HomeItem) {
         when (item.kind) {
-            Kind.SONG -> {
-                val songs = results.filter { it.kind == Kind.SONG && it.videoId != null }
-                playTracks(songs.map { it.toTrack() }, songs.indexOfFirst { it.videoId == item.videoId }.coerceAtLeast(0))
-            }
+            Kind.SONG -> playSong(item.toTrack())
             else -> openItem(item)
         }
     }
@@ -484,10 +481,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun playItem(section: HomeSection, item: HomeItem) {
         when (item.kind) {
-            Kind.SONG -> {
-                val songs = section.items.filter { it.kind == Kind.SONG && it.videoId != null }
-                playTracks(songs.map { it.toTrack() }, songs.indexOfFirst { it.videoId == item.videoId }.coerceAtLeast(0))
-            }
+            Kind.SONG -> playSong(item.toTrack())
             else -> openItem(item)
         }
     }
@@ -496,6 +490,10 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         val songs = section.items.filter { it.kind == Kind.SONG && it.videoId != null }
         if (songs.isNotEmpty()) playTracks(songs.map { it.toTrack() }, 0)
     }
+
+    // a song picked from search or a feed shelf plays on its own, its radio fills the queue (endless queue)
+    // instead of dumping the whole result list into it
+    fun playSong(t: Track) = playTracks(listOf(t), 0)
 
     fun playTracks(tracks: List<Track>, index: Int, shuffled: Boolean = false) {
         val c = controller ?: run {
