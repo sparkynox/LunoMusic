@@ -92,6 +92,11 @@ object InnerTube {
         }
     }
 
+    fun accountMenu(): JSONObject = post(
+        "account/account_menu",
+        JSONObject().put("deviceTheme", "DEVICE_THEME_SELECTED").put("userInterfaceTheme", "USER_INTERFACE_THEME_DARK")
+    )
+
     // like / unlike, needs login
     fun like(videoId: String, remove: Boolean) {
         val body = JSONObject().put("target", JSONObject().put("videoId", videoId))

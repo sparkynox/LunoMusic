@@ -19,6 +19,8 @@ data class HomeItem(
 
 fun HomeItem.asTrack(): Track? = videoId?.let { Track(it, title, artist, thumb, 0L, artistId) }
 
+class AccountInfo(val name: String, val email: String?, val handle: String?, val photo: String?)
+
 class ArtistData(
     val name: String,
     val thumb: String?,
@@ -78,6 +80,17 @@ object Feed {
                 artistId = artistId(v.obj("longBylineText").runs()),
             )
         }
+    }
+
+    // name and photo of the logged in youtube music account
+    fun account(): AccountInfo? {
+        val h = InnerTube.accountMenu().arr("actions").objs().firstOrNull().obj("openPopupAction").obj("popup")
+            .obj("multiPageMenuRenderer").obj("header").obj("activeAccountHeaderRenderer") ?: return null
+        val name = h.obj("accountName").firstText() ?: return null
+        return AccountInfo(
+            name, h.obj("email").firstText(), h.obj("channelHandle").firstText(),
+            h.obj("accountPhoto").arr("thumbnails").objs().lastOrNull().str("url")
+        )
     }
 
     fun suggestions(q: String): List<String> {
