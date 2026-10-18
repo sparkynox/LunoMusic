@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,10 +51,21 @@ import lumi.sparkynox.lunomusic.util.Prefs
 @Composable
 fun SettingsScreen(vm: MusicVM) {
     var ytFirst by remember { mutableStateOf(Prefs.ytdlpFirst) }
+    var skipSilence by remember { mutableStateOf(Prefs.skipSilence) }
     var verbose by remember { mutableStateOf(Prefs.verboseLogs) }
     var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate) }
     var confirm by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
+    var showBgDialog by remember { mutableStateOf(false) }
+    val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked ->
+        picked?.let { vm.setLyricsBg(it) }
+    }
+    if (showBgDialog) LyricsBackgroundDialog(
+        hasBackground = vm.lyricsBg.isNotEmpty(),
+        onChoose = { showBgDialog = false; bgPicker.launch(arrayOf("image/*", "video/*")) },
+        onRemove = { showBgDialog = false; vm.setLyricsBg(null) },
+        onDismiss = { showBgDialog = false }
+    )
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 200.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -74,6 +87,14 @@ fun SettingsScreen(vm: MusicVM) {
                 ThemeState.dynamic = it
                 Prefs.dynamicColor = it
             }
+            ClickRow(
+                R.drawable.image, "Lyrics background",
+                when {
+                    vm.lyricsBg.isEmpty() -> "Not set, pick an image or a video to show behind the lyrics"
+                    vm.lyricsBgVideo -> "Video, plays on a loop without sound"
+                    else -> "Image"
+                }
+            ) { showBgDialog = true }
             SwitchRow(R.drawable.contrast, "Pure black", "Black backgrounds, saves battery on OLED", ThemeState.pureBlack) {
                 ThemeState.pureBlack = it
                 Prefs.pureBlack = it
@@ -82,6 +103,12 @@ fun SettingsScreen(vm: MusicVM) {
 
         Group("Playback") {
             SwitchRow(R.drawable.all_inclusive, "Endless queue", "When the queue runs low, keep going with the YouTube Music radio of the current song", vm.endless) { vm.setEndlessEnabled(it) }
+            SwitchRow(R.drawable.waves, "Skip silence", "Jumps over silent parts at the start, end or in the middle of songs", skipSilence) {
+                skipSilence = it
+                Prefs.skipSilence = it
+                lumi.sparkynox.lunomusic.PlayerService.setSkipSilence(it)
+                AppLog.i("Settings", "skip silence = $it")
+            }
             SwitchRow(R.drawable.speed, "Try yt-dlp first", "Off: BravePipe first, yt-dlp as fallback. A song that fails to play switches the order by itself", ytFirst) {
                 ytFirst = it
                 Prefs.ytdlpFirst = it

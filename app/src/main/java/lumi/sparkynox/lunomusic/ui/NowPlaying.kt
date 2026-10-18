@@ -37,7 +37,10 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -132,6 +135,10 @@ fun NowPlaying(vm: MusicVM) {
     var drag by remember { mutableStateOf<Float?>(null) }
     var panel by remember { mutableIntStateOf(0) } // 0 art, 1 queue, 2 lyrics
     var showSleep by remember { mutableStateOf(false) }
+    var showBgDialog by remember { mutableStateOf(false) }
+    val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked ->
+        picked?.let { vm.setLyricsBg(it) }
+    }
 
     val id = vm.queue.getOrNull(vm.queueIndex)?.mediaId
     val liked = id != null && id in vm.likedIds
@@ -152,6 +159,12 @@ fun NowPlaying(vm: MusicVM) {
     }
     LaunchedEffect(panel, meta?.title) { if (panel == 2) vm.loadLyrics() }
     if (showSleep) SleepTimerDialog(vm) { showSleep = false }
+    if (showBgDialog) LyricsBackgroundDialog(
+        hasBackground = vm.lyricsBg.isNotEmpty(),
+        onChoose = { showBgDialog = false; bgPicker.launch(arrayOf("image/*", "video/*")) },
+        onRemove = { showBgDialog = false; vm.setLyricsBg(null) },
+        onDismiss = { showBgDialog = false }
+    )
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to grad[0], 0.5f to grad[1], 1f to grad[2]))) {
         // blurred cover behind everything, like Apple Music. SoftBlur works on every Android version
@@ -163,7 +176,22 @@ fun NowPlaying(vm: MusicVM) {
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.55f }
         )
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
+        // the picked lyrics background, only while the lyrics are open
+        val customBg = vm.lyricsBg.isNotEmpty()
+        AnimatedVisibility(visible = panel == 2 && customBg, enter = fadeIn(tween(350)), exit = fadeOut(tween(300))) {
+            LyricsBackdrop(vm.lyricsBg, vm.lyricsBgVideo, onError = { vm.lyricsBgFailed() }, modifier = Modifier.fillMaxSize())
+        }
+        // One scrim over the whole screen, so the queue / lyrics area and the controls below it are the same color.
+        // (The panels used to add their own scrim on top, which left a visible edge above the controls.)
+        val scrim by animateFloatAsState(
+            when {
+                panel == 2 && customBg -> 0.5f
+                panel != 0 -> 0.45f
+                else -> 0.22f
+            },
+            tween(300), label = "scrim"
+        )
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)))
         Column(Modifier.fillMaxSize().systemBarsPadding().displayCutoutPadding()) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
@@ -202,6 +230,11 @@ fun NowPlaying(vm: MusicVM) {
                 RoundIcon(
                     R.drawable.expand_more, { vm.showPlayer = false },
                     modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp),
+                    container = Color.Black.copy(alpha = 0.35f), tint = Color.White
+                )
+                if (panel == 2) RoundIcon(
+                    R.drawable.image, { showBgDialog = true },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp),
                     container = Color.Black.copy(alpha = 0.35f), tint = Color.White
                 )
             }
@@ -613,7 +646,7 @@ private fun LyricsPanel(vm: MusicVM, pos: () -> Long) {
         if (lines.isNotEmpty() && !dragged) state.centerOn(cur)
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             vm.lyricsState == "loading" -> Text("Loading lyrics...", color = Color.White.copy(alpha = 0.7f))
             vm.lyricsState == "none" -> Text("No synced lyrics found for this one", color = Color.White.copy(alpha = 0.7f))

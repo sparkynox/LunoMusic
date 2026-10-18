@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +54,7 @@ import lumi.sparkynox.lunomusic.extract.HomeItem
 import lumi.sparkynox.lunomusic.extract.HomeSection
 import lumi.sparkynox.lunomusic.extract.Kind
 import lumi.sparkynox.lunomusic.extract.Track
+import lumi.sparkynox.lunomusic.util.Share
 
 val listPad = PaddingValues(bottom = 150.dp)
 
@@ -209,6 +211,11 @@ fun TrackRow(
                 DropdownMenuItem(
                     text = { Text("Add to playlist") }, onClick = { menu = false; vm.openAddToPlaylist(t) },
                     leadingIcon = { Icon(painterResource(R.drawable.playlist_add), null) }
+                )
+                val shareCtx = LocalContext.current
+                DropdownMenuItem(
+                    text = { Text("Share") }, onClick = { menu = false; Share.song(shareCtx, t.id, t.title, t.artist) },
+                    leadingIcon = { Icon(painterResource(R.drawable.share), null) }
                 )
                 DropdownMenuItem(
                     text = { Text("Not interested") }, onClick = { menu = false; vm.notInterested(t.id, t.title) },

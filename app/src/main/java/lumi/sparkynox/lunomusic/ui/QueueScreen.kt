@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +59,7 @@ import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import lumi.sparkynox.lunomusic.MusicVM
 import lumi.sparkynox.lunomusic.R
+import lumi.sparkynox.lunomusic.util.Share
 
 private val RowHeight = 70.dp
 
@@ -87,7 +89,7 @@ fun QueueScreen(vm: MusicVM) {
     val rowPx = with(LocalDensity.current) { RowHeight.toPx() }
     val listState = rememberLazyListState()
 
-    Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
+    Column(Modifier.fillMaxSize()) {
         // current song
         Row(
             Modifier.fillMaxWidth().padding(start = 72.dp, end = 8.dp, top = 14.dp, bottom = 10.dp),
@@ -309,6 +311,7 @@ private fun QueueRow(
 // more menu of the current song: add to playlist, download, playback speed
 @Composable
 private fun CurrentMenu(vm: MusicVM) {
+    val ctx = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
     Box {
@@ -327,6 +330,11 @@ private fun CurrentMenu(vm: MusicVM) {
                     text = { Text("Download") },
                     leadingIcon = { Icon(painterResource(R.drawable.download), null) },
                     onClick = { open = false; vm.currentTrack()?.let { vm.download(it) } }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    leadingIcon = { Icon(painterResource(R.drawable.share), null) },
+                    onClick = { open = false; vm.currentTrack()?.let { Share.song(ctx, it.id, it.title, it.artist) } }
                 )
                 DropdownMenuItem(
                     text = { Text("Playback speed  (${speedLabel(vm.speed)})") },
