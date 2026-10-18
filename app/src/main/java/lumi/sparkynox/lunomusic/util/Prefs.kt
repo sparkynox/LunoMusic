@@ -80,4 +80,17 @@ object Prefs {
     var batteryAskAfter: Long
         get() = sp.getLong("battery_ask_after", 0L)
         set(v) = sp.edit().putLong("battery_ask_after", v).apply()
+
+    // custom background behind the lyrics: uri of the picked image or video, empty = none
+    var lyricsBg: String
+        get() = sp.getString("lyrics_bg", "") ?: ""
+        set(v) = sp.edit().putString("lyrics_bg", v).apply()
+
+    var lyricsBgVideo: Boolean
+        get() = sp.getBoolean("lyrics_bg_video", false)
+        set(v) = sp.edit().putBoolean("lyrics_bg_video", v).apply()
+
+    var skipSilence: Boolean
+        get() = sp.getBoolean("skip_silence", false)
+        set(v) = sp.edit().putBoolean("skip_silence", v).apply()
 }
