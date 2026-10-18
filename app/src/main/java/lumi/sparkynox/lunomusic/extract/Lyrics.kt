@@ -27,12 +27,18 @@ object Lyrics {
         Thread(lrc).start()
         val rich = runCatching { YouLy.fetch(clean(title), artist.substringBefore(",").trim(), seconds) }
             .onFailure { AppLog.w("Lyrics", "youlyplus failed", it) }.getOrDefault(emptyList())
-        if (rich.isNotEmpty()) {
+        if (rich.isNotEmpty() && fits(rich, seconds)) {
             AppLog.i("Lyrics", "'$title' from youlyplus, ${rich.size} lines, word sync=${rich.any { it.words != null }}")
             return rich
         }
+        if (rich.isNotEmpty()) AppLog.w("Lyrics", "'$title': youlyplus lyrics run to ${rich.last().ms / 1000}s but the song is ${seconds}s, wrong version, skipped")
         return lrc.get()
     }
+
+    // The title is cleaned (brackets removed) before searching, so "SAD! (FUNK)" finds the lyrics of "SAD!", a different
+    // cut that has other timing. Lyrics that carry on past the end of the song can't belong to it.
+    private fun fits(lines: List<LyricLine>, seconds: Long) =
+        seconds <= 0 || lines.isEmpty() || lines.last().ms <= (seconds + 4) * 1000
 
     private fun fetchLrcLib(title: String, artist: String, seconds: Long): List<LyricLine> {
         val t = clean(title)
@@ -52,13 +58,23 @@ object Lyrics {
             .addQueryParameter("q", "$t $a")
             .build()
         val arr = body(search)?.let { JSONArray(it) } ?: return emptyList()
+        // take the result whose length is closest to the song, anything more than 5s off is another version
+        var best: List<LyricLine> = emptyList()
+        var bestDiff = Double.MAX_VALUE
         for (i in 0 until arr.length()) {
-            val lines = parse(arr.optJSONObject(i)?.optString("syncedLyrics"))
-            if (lines.isNotEmpty()) {
-                AppLog.i("Lyrics", "'$t' found via search (#$i), ${lines.size} lines")
-                return lines
+            val o = arr.optJSONObject(i) ?: continue
+            val lines = parse(o.optString("syncedLyrics"))
+            if (lines.isEmpty()) continue
+            val len = o.optDouble("duration", -1.0)
+            val diff = if (seconds > 0 && len > 0) Math.abs(len - seconds) else 0.0
+            if (seconds > 0 && len > 0 && diff > 5.0) continue
+            if (diff < bestDiff) {
+                best = lines
+                bestDiff = diff
+                AppLog.i("Lyrics", "'$t' found via search (#$i), ${lines.size} lines, ${if (len > 0) "length ${len.toInt()}s" else "length unknown"}")
             }
         }
+        if (best.isNotEmpty()) return best
         AppLog.w("Lyrics", "'$t' by '$a' ($seconds s): nothing synced found")
         return emptyList()
     }
