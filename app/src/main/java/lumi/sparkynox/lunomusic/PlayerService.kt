@@ -66,6 +66,12 @@ class PlayerService : MediaSessionService() {
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(resolving))
+            // start playing after 1s of audio instead of 2.5s
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(20_000, 60_000, 1_000, 2_000)
+                    .build()
+            )
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -112,6 +118,14 @@ class PlayerService : MediaSessionService() {
                 savedMs = 0
                 playStart = if (player.isPlaying) SystemClock.elapsedRealtime() else 0
                 if (playStart > 0) scheduleThreshold()
+                // warm the next two songs
+                for (i in 1..2) {
+                    val n = player.currentMediaItemIndex + i
+                    if (n < player.mediaItemCount) {
+                        val nid = player.getMediaItemAt(n).mediaId
+                        if (!Downloads.file(nid).exists()) Extractor.prefetch(nid)
+                    }
+                }
                 AppLog.i("Player", "now playing ${mediaItem?.mediaId} '${mediaItem?.mediaMetadata?.title}' (reason=$reason, queue=${player.mediaItemCount})")
             }
 

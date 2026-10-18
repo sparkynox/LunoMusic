@@ -27,6 +27,7 @@ class LunoApp : Application(), ImageLoaderFactory {
         AppLog.i("App", "logged in: ${Session.loggedIn}")
 
         NewPipe.init(LunoDownloader, Localization("en", "IN"), ContentCountry("IN"))
+        lumi.sparkynox.lunomusic.extract.Extractor.warmUp()
         PyYtDlp.ctx = this
         Thread {
             val t0 = System.currentTimeMillis()
