@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -87,6 +89,7 @@ fun Screen(vm: MusicVM) {
     val proximity by animateFloatAsState(if (hasMini) 1f else 0f, spring(stiffness = Spring.StiffnessLow), label = "barJunction")
 
     Box(Modifier.fillMaxSize()) {
+      Box(Modifier.fillMaxSize().systemBarsPadding().displayCutoutPadding()) {
         AnimatedContent(
             targetState = vm.tab,
             transitionSpec = {
@@ -115,6 +118,8 @@ fun Screen(vm: MusicVM) {
             ) { MiniPlayer(vm, proximity) }
             FloatingNav(tab = vm.tab, proximity = proximity, onSelect = { vm.pages = emptyList(); vm.tab = it })
         }
+
+      }
 
         vm.update?.let { UpdateDialog(vm, it) }
 

@@ -101,12 +101,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import lumi.sparkynox.lunomusic.MusicVM
 import lumi.sparkynox.lunomusic.R
@@ -128,12 +131,14 @@ fun NowPlaying(vm: MusicVM) {
     var dur by remember { mutableLongStateOf(0L) }
     var drag by remember { mutableStateOf<Float?>(null) }
     var panel by remember { mutableIntStateOf(0) } // 0 art, 1 queue, 2 lyrics
+    var showSleep by remember { mutableStateOf(false) }
 
     val id = vm.queue.getOrNull(vm.queueIndex)?.mediaId
     val liked = id != null && id in vm.likedIds
     val artistId = meta?.extras?.getString("artistId")
     val artColor by rememberArtColor(meta?.artworkUri, scheme.surfaceContainerHigh)
     val bg = lerp(scheme.background, artColor, 0.85f)
+    val grad = rememberArtGradient(meta?.artworkUri, scheme.surfaceContainerHigh)
     val text = Color.White
 
     LaunchedEffect(vm.playing) {
@@ -146,19 +151,20 @@ fun NowPlaying(vm: MusicVM) {
         }
     }
     LaunchedEffect(panel, meta?.title) { if (panel == 2) vm.loadLyrics() }
+    if (showSleep) SleepTimerDialog(vm) { showSleep = false }
 
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(bg, scheme.background)))) {
-        // blurred cover behind everything, like Apple Music (blur needs Android 12+, older phones keep the gradient)
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
-            AsyncImage(
-                model = meta?.artworkUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().blur(80.dp).graphicsLayer { alpha = 0.6f }
-            )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
-        }
-        Column(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to grad[0], 0.5f to grad[1], 1f to grad[2]))) {
+        // blurred cover behind everything, like Apple Music. SoftBlur works on every Android version
+        val ctx = LocalContext.current
+        AsyncImage(
+            model = ImageRequest.Builder(ctx).data(meta?.artworkUri).size(96).allowHardware(false)
+                .transformations(SoftBlur()).crossfade(700).build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.55f }
+        )
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
+        Column(Modifier.fillMaxSize().systemBarsPadding().displayCutoutPadding()) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
                     targetState = panel,
@@ -166,7 +172,7 @@ fun NowPlaying(vm: MusicVM) {
                     label = "playerPanel"
                 ) { p ->
                     when (p) {
-                        1 -> QueuePanel(vm)
+                        1 -> QueueScreen(vm)
                         2 -> LyricsPanel(vm) { pos }
                         else -> {
                             // square rounded artwork, shrinks a bit while paused
@@ -210,7 +216,17 @@ fun NowPlaying(vm: MusicVM) {
                         ) { t ->
                             Text(
                                 t, color = text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.basicMarquee()
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            Brush.horizontalGradient(0f to Color.Black, 0.92f to Color.Black, 1f to Color.Transparent),
+                                            blendMode = BlendMode.DstIn
+                                        )
+                                    }
+                                    .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, velocity = 36.dp)
                             )
                         }
                         Text(
@@ -249,6 +265,12 @@ fun NowPlaying(vm: MusicVM) {
 
                 Spacer(Modifier.height(8.dp))
 
+                val scrubSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val scrubbing by scrubSource.collectIsDraggedAsState()
+                val trackH by animateDpAsState(
+                    if (scrubbing) 16.dp else 10.dp,
+                    spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "trackH"
+                )
                 Slider(
                     value = drag ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f,
                     onValueChange = { drag = it },
@@ -260,10 +282,14 @@ fun NowPlaying(vm: MusicVM) {
                         }
                         drag = null
                     },
-                    colors = SliderDefaults.colors(
-                        thumbColor = text, activeTrackColor = text, inactiveTrackColor = text.copy(alpha = 0.25f)
-                    ),
-                    thumb = { Box(Modifier.size(12.dp).background(text, CircleShape)) },
+                    interactionSource = scrubSource,
+                    thumb = { Spacer(Modifier.size(0.dp)) },
+                    track = { st ->
+                        PlayerSliderTrack(
+                            st, trackHeight = trackH,
+                            colors = SliderDefaults.colors(activeTrackColor = text.copy(alpha = 0.9f), inactiveTrackColor = Color.White.copy(alpha = 0.3f))
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
                 TimeRow(
@@ -297,16 +323,16 @@ fun NowPlaying(vm: MusicVM) {
 
                 val offline = id != null && id in Downloads.ids
                 val dlProgress = id?.let { Downloads.active[it] }
-                LazyRow(
+                Row(
                     Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                    contentPadding = PaddingValues(0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    item { PlayerToggle(R.drawable.queue_music, panel == 1) { panel = if (panel == 1) 0 else 1 } }
-                    item { PlayerToggle(R.drawable.lyrics, panel == 2) { panel = if (panel == 2) 0 else 2 } }
-                    item { PlayerToggle(R.drawable.bedtime, vm.sleepMinutes > 0, if (vm.sleepMinutes > 0) "${vm.sleepMinutes}m" else null) { vm.cycleSleep() } }
-                    item { PlayerToggle(if (vm.shuffle) R.drawable.shuffle_on else R.drawable.shuffle, vm.shuffle) { vm.toggleShuffle() } }
-                    item {
+                    run { PlayerToggle(R.drawable.queue_music, panel == 1) { panel = if (panel == 1) 0 else 1 } }
+                    run { PlayerToggle(R.drawable.lyrics, panel == 2) { panel = if (panel == 2) 0 else 2 } }
+                    run { PlayerToggle(R.drawable.bedtime, vm.sleepMinutes > 0 || vm.sleepEndOfSong, if (vm.sleepMinutes > 0) "${vm.sleepMinutes}m" else null) { showSleep = true } }
+                    run { PlayerToggle(if (vm.shuffle) R.drawable.shuffle_on else R.drawable.shuffle, vm.shuffle) { vm.toggleShuffle() } }
+                    run {
                         PlayerToggle(
                             when (vm.repeat) {
                                 Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
@@ -316,8 +342,8 @@ fun NowPlaying(vm: MusicVM) {
                             vm.repeat != Player.REPEAT_MODE_OFF
                         ) { vm.cycleRepeat() }
                     }
-                    item { PlayerToggle(R.drawable.all_inclusive, vm.endless, "Endless") { vm.setEndlessEnabled(!vm.endless) } }
-                    item {
+                    run { PlayerToggle(R.drawable.all_inclusive, vm.endless) { vm.setEndlessEnabled(!vm.endless) } }
+                    run {
                         PlayerToggle(
                             if (offline) R.drawable.offline else R.drawable.download,
                             offline,
@@ -347,13 +373,13 @@ private fun PlayerArt(url: String?, modifier: Modifier = Modifier.fillMaxSize())
 private fun PlayerToggle(icon: Int, active: Boolean, label: String? = null, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val container by animateColorAsState(if (active) scheme.primaryContainer else Color.White.copy(alpha = 0.14f), label = "toggleBg")
-    Surface(onClick = onClick, shape = CircleShape, color = container, modifier = Modifier.height(48.dp).widthIn(min = 48.dp)) {
+    Surface(onClick = onClick, shape = CircleShape, color = container, modifier = Modifier.height(42.dp).widthIn(min = 42.dp)) {
         Row(
-            Modifier.padding(horizontal = if (label != null) 16.dp else 0.dp),
+            Modifier.padding(horizontal = if (label != null) 10.dp else 0.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(painterResource(icon), null, tint = if (active) scheme.onPrimaryContainer else Color.White, modifier = Modifier.size(22.dp))
+            Icon(painterResource(icon), null, tint = if (active) scheme.onPrimaryContainer else Color.White, modifier = Modifier.size(20.dp))
             if (label != null) {
                 Spacer(Modifier.size(6.dp))
                 Text(label, color = if (active) scheme.onPrimaryContainer else Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1)
@@ -387,7 +413,8 @@ private fun VolumeRow(text: Color) {
             colors = SliderDefaults.colors(
                 thumbColor = text, activeTrackColor = text, inactiveTrackColor = text.copy(alpha = 0.22f)
             ),
-            thumb = { Box(Modifier.size(10.dp).background(text, CircleShape)) },
+            thumb = { Spacer(Modifier.size(0.dp)) },
+            track = { st -> PlayerSliderTrack(st, trackHeight = 8.dp, colors = SliderDefaults.colors(activeTrackColor = text.copy(alpha = 0.9f), inactiveTrackColor = Color.White.copy(alpha = 0.3f))) },
             modifier = Modifier.weight(1f)
         )
         Icon(painterResource(R.drawable.volume_up), null, tint = text.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
@@ -611,6 +638,7 @@ private fun LyricsPanel(vm: MusicVM, pos: () -> Long) {
                         dist = abs(i - cur),
                         startMs = line.ms,
                         endMs = lines.getOrNull(i + 1)?.ms ?: (line.ms + 5000),
+                        words = line.words,
                         pos = pos,
                         onClick = { vm.seekTo(line.ms) }
                     )
@@ -622,14 +650,29 @@ private fun LyricsPanel(vm: MusicVM, pos: () -> Long) {
 
 // the sung line glows and fills as it plays, the lines around it blur out with distance
 @Composable
-private fun LyricLine(text: String, dist: Int, startMs: Long, endMs: Long, pos: () -> Long, onClick: () -> Unit) {
+private fun LyricLine(text: String, dist: Int, startMs: Long, endMs: Long, words: List<lumi.sparkynox.lunomusic.extract.LyricWord>?, pos: () -> Long, onClick: () -> Unit) {
     val active = dist == 0
     val alpha by animateFloatAsState(if (active) 1f else (0.55f - dist * 0.08f).coerceAtLeast(0.16f), tween(420), label = "lyricAlpha")
     val scale by animateFloatAsState(if (active) 1f else 0.9f, spring(stiffness = Spring.StiffnessLow), label = "lyricScale")
     val blur by animateDpAsState(if (active) 0.dp else (dist.coerceAtMost(5) * 1.5f).dp, tween(420), label = "lyricBlur")
     val glow by animateFloatAsState(if (active) 1f else 0f, tween(500), label = "lyricGlow")
 
-    val target = if (active) ((pos() - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1L)).coerceIn(0f, 1f) else 0f
+    // with word timing the fill follows every word (weighted by its letters), without it the line fills evenly
+    val target = when {
+        !active -> 0f
+        words.isNullOrEmpty() -> ((pos() - startMs).toFloat() / (endMs - startMs).coerceAtLeast(1L)).coerceIn(0f, 1f)
+        else -> {
+            val now = pos()
+            var total = 0f
+            var done = 0f
+            for (w in words) {
+                val n = w.text.length + 1f
+                total += n
+                done += n * ((now - w.start).toFloat() / (w.end - w.start).coerceAtLeast(1L)).coerceIn(0f, 1f)
+            }
+            if (total > 0f) done / total else 0f
+        }
+    }
     val fill by animateFloatAsState(target, tween(160, easing = LinearEasing), label = "lyricFill")
 
     val base = TextStyle(fontSize = 28.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold)

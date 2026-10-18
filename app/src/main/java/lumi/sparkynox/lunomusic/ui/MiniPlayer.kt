@@ -50,6 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -89,6 +91,9 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
         bottomStart = lerp(FloatingBarStandaloneCornerRadius.value, FloatingBarJunctionCornerRadius.value, proximity).dp,
         bottomEnd = lerp(FloatingBarStandaloneCornerRadius.value, FloatingBarJunctionCornerRadius.value, proximity).dp,
     )
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val pressScale by androidx.compose.animation.core.animateFloatAsState(if (pressed) 1.03f else 1f, spring(stiffness = Spring.StiffnessMediumLow), label = "miniPress")
     val back = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -97,11 +102,12 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
                 .widthIn(max = NavigationBarMaxWidth)
                 .fillMaxWidth()
                 .height(MiniPlayerHeight)
+                .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .clip(shape)
                 .background(scheme.surfaceContainerHigh.copy(alpha = 0.88f))
                 .border(0.5.dp, Color.White.copy(alpha = 0.14f), shape)
-                .clickable { vm.showPlayer = true }
+                .clickable(interactionSource = press, indication = null) { vm.showPlayer = true }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -128,7 +134,7 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(scheme.surfaceVariant)
                 )
 
