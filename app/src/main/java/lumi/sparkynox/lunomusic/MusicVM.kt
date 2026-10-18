@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -98,6 +99,10 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     var endless by mutableStateOf(Prefs.endless)
         private set
     var sleepMinutes by mutableIntStateOf(0)
+    var sleepEndOfSong by mutableStateOf(false)
+    var queueLocked by mutableStateOf(false)
+    var speed by mutableFloatStateOf(1f)
+        private set
 
     // "not interested" songs: hidden from queue, home, search and the endless radio
     var blockedIds by mutableStateOf(Prefs.blockedIds)
@@ -146,6 +151,11 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             queueIndex = controller?.currentMediaItemIndex ?: 0
+            if (sleepEndOfSong && reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
+                sleepEndOfSong = false
+                controller?.pause()
+                AppLog.i("VM", "sleep timer: song ended, paused")
+            }
             maybeExtend()
         }
 
@@ -682,11 +692,21 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun clearQueue() {
         val c = controller ?: return
+        if (queueLocked) return
         AppLog.i("VM", "queue cleared")
         c.stop()
         c.clearMediaItems()
         queue = emptyList()
         queueIndex = 0
+    }
+
+    // clears only what comes after the current song
+    fun clearUpcoming() {
+        val c = controller ?: return
+        if (queueLocked) return
+        val from = c.currentMediaItemIndex + 1
+        if (from < c.mediaItemCount) c.removeMediaItems(from, c.mediaItemCount)
+        AppLog.i("VM", "upcoming songs cleared")
     }
 
     fun download(t: Track) = Downloads.start(t)
@@ -733,6 +753,34 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
 
     fun playQueueIndex(i: Int) {
         controller?.seekTo(i, 0L)
+    }
+
+    // sleep timer dialog: minutes > 0 starts a countdown, endOfSong stops after the current song, both off = reset
+    fun setSleep(minutes: Int, endOfSong: Boolean) {
+        sleepJob?.cancel()
+        sleepMinutes = if (endOfSong) 0 else minutes
+        sleepEndOfSong = endOfSong
+        AppLog.i("VM", "sleep timer: ${if (endOfSong) "end of song" else "$minutes min"}")
+        if (!endOfSong && minutes > 0) {
+            sleepJob = viewModelScope.launch {
+                delay(minutes * 60_000L)
+                controller?.pause()
+                sleepMinutes = 0
+                AppLog.i("VM", "sleep timer fired, paused")
+            }
+        }
+    }
+
+    fun moveQueueItem(from: Int, to: Int) {
+        val c = controller ?: return
+        if (queueLocked || from !in 0 until c.mediaItemCount || to !in 0 until c.mediaItemCount) return
+        c.moveMediaItem(from, to)
+        syncQueue(c)
+    }
+
+    fun setSpeed(v: Float) {
+        controller?.setPlaybackSpeed(v)
+        speed = v
     }
 
     fun cycleSleep() {

@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // draw into the notch area too instead of leaving a black strip (Android 9+)
+        if (Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
         hideBars()
 
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -52,8 +59,8 @@ class MainActivity : ComponentActivity() {
             LunoTheme {
                 val vm = viewModel<MusicVM>()
                 // keeps everything clear of the status bar and the 3-button / gesture nav bar
-                Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                    if (vm.showLogin) LoginScreen(onDone = vm::onLoginDone, onBack = { vm.showLogin = false })
+                Box(Modifier.fillMaxSize()) {
+                    if (vm.showLogin) Box(Modifier.fillMaxSize().systemBarsPadding().displayCutoutPadding()) { LoginScreen(onDone = vm::onLoginDone, onBack = { vm.showLogin = false }) }
                     else Screen(vm)
                 }
 
