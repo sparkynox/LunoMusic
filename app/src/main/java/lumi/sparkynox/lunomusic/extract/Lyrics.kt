@@ -8,7 +8,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-data class LyricLine(val ms: Long, val text: String)
+// words is only filled when the source has word level timing (YouLyPlus), start/end are absolute ms
+data class LyricWord(val text: String, val start: Long, val end: Long)
+data class LyricLine(val ms: Long, val text: String, val words: List<LyricWord>? = null)
 
 // synced lyrics from lrclib.net
 object Lyrics {
@@ -19,7 +21,20 @@ object Lyrics {
 
     private val tag = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]""")
 
+    // YouLyPlus has word timing and covers more songs (Hindi too), lrclib runs next to it and covers the rest
     fun fetch(title: String, artist: String, seconds: Long): List<LyricLine> {
+        val lrc = java.util.concurrent.FutureTask { runCatching { fetchLrcLib(title, artist, seconds) }.getOrDefault(emptyList()) }
+        Thread(lrc).start()
+        val rich = runCatching { YouLy.fetch(clean(title), artist.substringBefore(",").trim(), seconds) }
+            .onFailure { AppLog.w("Lyrics", "youlyplus failed", it) }.getOrDefault(emptyList())
+        if (rich.isNotEmpty()) {
+            AppLog.i("Lyrics", "'$title' from youlyplus, ${rich.size} lines, word sync=${rich.any { it.words != null }}")
+            return rich
+        }
+        return lrc.get()
+    }
+
+    private fun fetchLrcLib(title: String, artist: String, seconds: Long): List<LyricLine> {
         val t = clean(title)
         val a = artist.substringBefore(",").trim()
 
@@ -59,6 +74,8 @@ object Lyrics {
         val c = title.replace(Regex("""\s*[(\[].*?[)\]]"""), "").replace(" - Topic", "").trim()
         return c.ifEmpty { title }
     }
+
+    fun parseLrc(lrc: String?) = parse(lrc)
 
     private fun parse(lrc: String?): List<LyricLine> {
         if (lrc.isNullOrBlank()) return emptyList()
