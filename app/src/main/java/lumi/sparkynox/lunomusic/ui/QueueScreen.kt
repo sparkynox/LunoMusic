@@ -337,7 +337,7 @@ private fun CurrentMenu(vm: MusicVM) {
                 listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
                     DropdownMenuItem(
                         text = { Text(speedLabel(s) + if (vm.speed == s) "  ✓" else "") },
-                        onClick = { vm.setSpeed(s); open = false; speedMenu = false }
+                        onClick = { vm.changeSpeed(s); open = false; speedMenu = false }
                     )
                 }
             }
