@@ -778,7 +778,7 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
         syncQueue(c)
     }
 
-    fun setSpeed(v: Float) {
+    fun changeSpeed(v: Float) {
         controller?.setPlaybackSpeed(v)
         speed = v
     }
