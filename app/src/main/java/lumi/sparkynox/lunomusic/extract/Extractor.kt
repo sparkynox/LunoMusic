@@ -96,8 +96,32 @@ object Extractor {
 
     private fun srcName(src: Int) = if (src == 0) "pipe extractor" else "yt-dlp"
 
+    private val locks = ConcurrentHashMap<String, Any>()
+    private val pool = java.util.concurrent.Executors.newFixedThreadPool(2) { r -> Thread(r, "luno-prefetch").apply { isDaemon = true } }
+
+    private fun fresh(id: String) = cache[id]?.takeIf { System.currentTimeMillis() - it.at < CACHE_MS }?.url
+
+    // resolve ahead of time in the background so the song starts instantly when its turn comes
+    fun prefetch(id: String) {
+        if (fresh(id) != null) return
+        pool.execute { runCatching { resolve(id) } }
+    }
+
+    // first call in a session is the slow one (player js, python start), do it while the app is opening
+    fun warmUp() {
+        pool.execute { runCatching { viaPipe("jNQXAC9IVRw") } }
+    }
+
+    // one resolve per song at a time, a prefetch and the player asking together share the result
     fun resolve(id: String): String {
-        cache[id]?.let { if (System.currentTimeMillis() - it.at < CACHE_MS) return it.url }
+        fresh(id)?.let { return it }
+        synchronized(locks.getOrPut(id) { Any() }) {
+            fresh(id)?.let { return it }
+            return resolveNow(id)
+        }
+    }
+
+    private fun resolveNow(id: String): String {
 
         // 0 = pipe extractor, 1 = yt-dlp
         var order = if (Prefs.ytdlpFirst) listOf(1, 0) else listOf(0, 1)
