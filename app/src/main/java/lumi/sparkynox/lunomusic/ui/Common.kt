@@ -54,7 +54,7 @@ import lumi.sparkynox.lunomusic.extract.HomeSection
 import lumi.sparkynox.lunomusic.extract.Kind
 import lumi.sparkynox.lunomusic.extract.Track
 
-val listPad = PaddingValues(bottom = 200.dp)
+val listPad = PaddingValues(bottom = 150.dp)
 
 // springy press feedback, used on cards and buttons
 fun Modifier.bounceClick(onClick: () -> Unit): Modifier = composed {

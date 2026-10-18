@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -98,7 +99,8 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
                 .height(MiniPlayerHeight)
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .clip(shape)
-                .background(scheme.surfaceContainerHigh)
+                .background(scheme.surfaceContainerHigh.copy(alpha = 0.88f))
+                .border(0.5.dp, Color.White.copy(alpha = 0.14f), shape)
                 .clickable { vm.showPlayer = true }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
@@ -117,80 +119,51 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
                 }
         ) {
             Row(
-                Modifier.fillMaxSize().padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(52.dp)) {
-                    CircularWavyProgressIndicator(
-                        progress = { if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f },
-                        modifier = Modifier.fillMaxSize(),
-                        color = scheme.primary,
-                        trackColor = scheme.outline.copy(alpha = 0.18f),
-                    )
-                    AsyncImage(
-                        model = meta.artworkUri,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(scheme.surfaceVariant)
-                            .border(1.dp, scheme.outline.copy(alpha = 0.2f), CircleShape)
-                    )
-                }
+                AsyncImage(
+                    model = meta.artworkUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(scheme.surfaceVariant)
+                )
 
-                Column(Modifier.weight(1f).padding(horizontal = 10.dp), verticalArrangement = Arrangement.Center) {
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.Center) {
                     AnimatedContent(
                         targetState = meta.title?.toString() ?: "",
                         transitionSpec = { fadeIn() togetherWith fadeOut() },
                         label = "miniTitle"
                     ) { title ->
                         Text(
-                            title, style = MaterialTheme.typography.titleMediumEmphasized, color = scheme.onSurface,
+                            title, style = MaterialTheme.typography.titleSmall, color = scheme.onSurface,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.basicMarquee()
                         )
                     }
-                    AnimatedContent(
-                        targetState = meta.artist?.toString() ?: "",
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "miniArtist"
-                    ) { artist ->
-                        Text(
-                            artist, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.basicMarquee()
-                        )
-                    }
+                    Text(
+                        meta.artist?.toString() ?: "", style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = vm::previous,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = scheme.surfaceContainerHighest, contentColor = scheme.onSurface
-                        )
-                    ) { Icon(painterResource(R.drawable.skip_previous), null, modifier = Modifier.size(20.dp)) }
-
-                    FilledIconButton(
-                        onClick = vm::toggle,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = scheme.primary, contentColor = scheme.onPrimary
-                        )
-                    ) { Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, modifier = Modifier.size(24.dp)) }
-
-                    IconButton(
-                        onClick = vm::next,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = scheme.surfaceContainerHighest, contentColor = scheme.onSurface
-                        )
-                    ) { Icon(painterResource(R.drawable.skip_next), null, modifier = Modifier.size(20.dp)) }
+                IconButton(onClick = vm::toggle, modifier = Modifier.size(44.dp)) {
+                    Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, tint = scheme.onSurface, modifier = Modifier.size(28.dp))
+                }
+                IconButton(onClick = vm::next, modifier = Modifier.size(44.dp)) {
+                    Icon(painterResource(R.drawable.skip_next), null, tint = scheme.onSurface, modifier = Modifier.size(26.dp))
                 }
             }
+
+            // thin progress line at the bottom edge
+            Box(
+                Modifier.align(Alignment.BottomStart)
+                    .fillMaxWidth(if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f)
+                    .height(2.dp)
+                    .background(scheme.primary.copy(alpha = 0.8f))
+            )
         }
     }
 }

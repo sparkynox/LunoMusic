@@ -106,7 +106,7 @@ fun Screen(vm: MusicVM) {
         Column(
             Modifier.align(Alignment.BottomCenter)
                 .padding(horizontal = NavigationBarHorizontalPadding)
-                .padding(bottom = 10.dp)
+                .padding(bottom = 6.dp)
         ) {
             AnimatedVisibility(
                 visible = hasMini,
@@ -127,7 +127,7 @@ fun Screen(vm: MusicVM) {
         AddToPlaylistSheet(vm)
         NoticeBar(
             vm,
-            Modifier.align(Alignment.BottomCenter).padding(bottom = if (vm.showPlayer && hasMini) 72.dp else 160.dp)
+            Modifier.align(Alignment.BottomCenter).padding(bottom = if (vm.showPlayer && hasMini) 24.dp else 130.dp)
         )
     }
 }
@@ -211,7 +211,7 @@ private fun HomeTab(vm: MusicVM) {
             }
         }
 
-        if (vm.homeLoading && vm.home.isEmpty()) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
+        if (vm.homeLoading && vm.home.isEmpty()) item { androidx.compose.foundation.layout.Box(Modifier.fillParentMaxSize(0.7f).fillMaxWidth(), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 88.dp) } }
         vm.error?.let {
             item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
         }
@@ -390,7 +390,7 @@ private fun LibraryTab(vm: MusicVM) {
             }
         }
 
-        if (vm.libLoading) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
+        if (vm.libLoading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 56.dp) } }
         if (vm.libPlaylists.isNotEmpty()) {
             item { SectionHeader("Your playlists") }
             item {

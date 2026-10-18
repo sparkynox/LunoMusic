@@ -101,6 +101,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -146,6 +148,16 @@ fun NowPlaying(vm: MusicVM) {
     LaunchedEffect(panel, meta?.title) { if (panel == 2) vm.loadLyrics() }
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(bg, scheme.background)))) {
+        // blurred cover behind everything, like Apple Music (blur needs Android 12+, older phones keep the gradient)
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            AsyncImage(
+                model = meta?.artworkUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().blur(80.dp).graphicsLayer { alpha = 0.6f }
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+        }
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 AnimatedContent(
@@ -156,22 +168,28 @@ fun NowPlaying(vm: MusicVM) {
                     when (p) {
                         1 -> QueuePanel(vm)
                         2 -> LyricsPanel(vm) { pos }
-                        else -> Box(Modifier.fillMaxSize()) {
-                            AnimatedContent(
-                                targetState = meta?.artworkUri,
-                                transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
-                                label = "playerArt"
-                            ) { art -> PlayerArt(art?.toString()) }
-                            Box(
-                                Modifier.fillMaxSize().background(
-                                    Brush.verticalGradient(
-                                        0f to Color.Black.copy(alpha = 0.35f),
-                                        0.25f to Color.Transparent,
-                                        0.7f to Color.Transparent,
-                                        1f to bg
-                                    )
-                                )
+                        else -> {
+                            // square rounded artwork, shrinks a bit while paused
+                            val artScale by animateFloatAsState(
+                                if (vm.playing) 1f else 0.86f,
+                                spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow), label = "artScale"
                             )
+                            Box(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                                AnimatedContent(
+                                    targetState = meta?.artworkUri,
+                                    transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
+                                    label = "playerArt"
+                                ) { art ->
+                                    PlayerArt(
+                                        art?.toString(),
+                                        Modifier.fillMaxWidth()
+                                            .aspectRatio(1f)
+                                            .graphicsLayer { scaleX = artScale; scaleY = artScale }
+                                            .shadow(28.dp, RoundedCornerShape(20.dp))
+                                            .clip(RoundedCornerShape(20.dp))
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -191,7 +209,7 @@ fun NowPlaying(vm: MusicVM) {
                             label = "playerTitle"
                         ) { t ->
                             Text(
-                                t, color = text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                                t, color = text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.basicMarquee()
                             )
                         }
@@ -231,8 +249,8 @@ fun NowPlaying(vm: MusicVM) {
 
                 Spacer(Modifier.height(8.dp))
 
-                WavySliderExpressive(
-                    value = { drag ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f },
+                Slider(
+                    value = drag ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f,
                     onValueChange = { drag = it },
                     onValueChangeFinished = {
                         drag?.let {
@@ -242,10 +260,10 @@ fun NowPlaying(vm: MusicVM) {
                         }
                         drag = null
                     },
-                    activeTrackColor = text,
-                    inactiveTrackColor = text.copy(alpha = 0.25f),
-                    thumbColor = text,
-                    isPlaying = vm.playing,
+                    colors = SliderDefaults.colors(
+                        thumbColor = text, activeTrackColor = text, inactiveTrackColor = text.copy(alpha = 0.25f)
+                    ),
+                    thumb = { Box(Modifier.size(12.dp).background(text, CircleShape)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 TimeRow(
@@ -257,18 +275,21 @@ fun NowPlaying(vm: MusicVM) {
 
                 Spacer(Modifier.height(8.dp))
 
-                V9AnimatedPlaybackControls(
-                    isPlayingProvider = { vm.playing },
-                    onPrevious = vm::previous,
-                    onPlayPause = vm::toggle,
-                    onNext = vm::next,
-                    height = 84.dp,
-                    pressAnimationSpec = spring(dampingRatio = 0.7f, stiffness = 380f),
-                    colorOtherButtons = Color.White.copy(alpha = 0.14f),
-                    tintOtherIcons = Color.White,
-                    colorPlayPause = Color.White,
-                    tintPlayPauseIcon = Color.Black,
-                )
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.IconButton(onClick = vm::previous, modifier = Modifier.size(76.dp)) {
+                        Icon(painterResource(R.drawable.skip_previous), null, tint = Color.White, modifier = Modifier.size(46.dp))
+                    }
+                    androidx.compose.material3.IconButton(onClick = vm::toggle, modifier = Modifier.size(88.dp)) {
+                        Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, tint = Color.White, modifier = Modifier.size(68.dp))
+                    }
+                    androidx.compose.material3.IconButton(onClick = vm::next, modifier = Modifier.size(76.dp)) {
+                        Icon(painterResource(R.drawable.skip_next), null, tint = Color.White, modifier = Modifier.size(46.dp))
+                    }
+                }
 
                 Spacer(Modifier.height(10.dp))
                 VolumeRow(text)
@@ -311,14 +332,14 @@ fun NowPlaying(vm: MusicVM) {
 
 // full screen artwork: asks for the biggest version, if that one fails to load the original url is used
 @Composable
-private fun PlayerArt(url: String?) {
+private fun PlayerArt(url: String?, modifier: Modifier = Modifier.fillMaxSize()) {
     var plain by remember(url) { mutableStateOf(false) }
     AsyncImage(
         model = if (plain) url else Img.best(url),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         onError = { plain = true },
-        modifier = Modifier.fillMaxSize()
+        modifier = modifier
     )
 }
 
@@ -366,6 +387,7 @@ private fun VolumeRow(text: Color) {
             colors = SliderDefaults.colors(
                 thumbColor = text, activeTrackColor = text, inactiveTrackColor = text.copy(alpha = 0.22f)
             ),
+            thumb = { Box(Modifier.size(10.dp).background(text, CircleShape)) },
             modifier = Modifier.weight(1f)
         )
         Icon(painterResource(R.drawable.volume_up), null, tint = text.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))

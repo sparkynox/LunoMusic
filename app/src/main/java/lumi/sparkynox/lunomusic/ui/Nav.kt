@@ -55,9 +55,10 @@ fun FloatingNav(tab: Int, proximity: Float, onSelect: (Int) -> Unit, modifier: M
         Surface(
             modifier = Modifier.widthIn(max = NavigationBarMaxWidth).fillMaxWidth().height(NavigationBarHeight),
             shape = shape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = NavigationBarDefaults.Elevation,
-            shadowElevation = NavigationBarDefaults.Elevation,
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.14f)),
         ) {
             ShortNavigationBar(
                 modifier = Modifier.fillMaxSize(),
@@ -68,7 +69,7 @@ fun FloatingNav(tab: Int, proximity: Float, onSelect: (Int) -> Unit, modifier: M
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Row(
-                        Modifier.widthIn(max = 360.dp).fillMaxWidth().fillMaxHeight().padding(vertical = 8.dp),
+                        Modifier.widthIn(max = 360.dp).fillMaxWidth().fillMaxHeight().padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         tabs.forEachIndexed { i, t ->
