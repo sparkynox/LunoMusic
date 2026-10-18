@@ -82,6 +82,8 @@ class PlayerService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        player.skipSilenceEnabled = lumi.sparkynox.lunomusic.util.Prefs.skipSilence
+        live = player
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -182,7 +184,17 @@ class PlayerService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
+    companion object {
+        @Volatile private var live: ExoPlayer? = null
+
+        // called from the settings switch, the player lives on the main thread like the settings screen
+        fun setSkipSilence(on: Boolean) {
+            live?.skipSilenceEnabled = on
+        }
+    }
+
     override fun onDestroy() {
+        live = null
         handler.removeCallbacks(thresholdCheck)
         flushStats()
         session?.run {

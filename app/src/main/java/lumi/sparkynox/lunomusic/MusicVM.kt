@@ -111,6 +111,12 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
     var lyrics by mutableStateOf<List<LyricLine>>(emptyList())
     var lyricsState by mutableStateOf("")
 
+    // custom background behind the lyrics, an image or a video that plays without sound
+    var lyricsBg by mutableStateOf(Prefs.lyricsBg)
+        private set
+    var lyricsBgVideo by mutableStateOf(Prefs.lyricsBgVideo)
+        private set
+
     var notice by mutableStateOf<Notice?>(null)
         private set
 
@@ -797,6 +803,67 @@ class MusicVM(app: Application) : AndroidViewModel(app) {
                 AppLog.i("VM", "sleep timer fired, paused")
             }
         }
+    }
+
+    fun setLyricsBg(uri: Uri?) {
+        val app = getApplication<Application>()
+        val old = lyricsBg
+        if (uri == null) {
+            applyLyricsBg("", false, old)
+            return
+        }
+        val type = app.contentResolver.getType(uri) ?: ""
+        val video = type.startsWith("video/")
+        if (!video && !type.startsWith("image/")) {
+            showNotice("Pick an image or a video")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val stored = withContext(Dispatchers.IO) {
+                    try {
+                        app.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        uri.toString()
+                    } catch (e: Exception) {
+                        // the file provider won't let us keep access to it, so keep our own copy
+                        AppLog.w("LyricsBg", "can't keep access to the picked file, copying it", e)
+                        val copy = File(app.filesDir, "lyrics_bg_${System.currentTimeMillis()}")
+                        val input = app.contentResolver.openInputStream(uri) ?: throw IOException("can't open the picked file")
+                        input.use { i -> copy.outputStream().use { o -> i.copyTo(o) } }
+                        Uri.fromFile(copy).toString()
+                    }
+                }
+                applyLyricsBg(stored, video, old)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e("LyricsBg", "couldn't use the picked file", e)
+                showNotice("Couldn't use that file")
+            }
+        }
+    }
+
+    private fun applyLyricsBg(stored: String, video: Boolean, old: String) {
+        Prefs.lyricsBg = stored
+        Prefs.lyricsBgVideo = video
+        lyricsBg = stored
+        lyricsBgVideo = video
+        // our own copy of the previous file isn't needed any more, access to a picked one can be given back
+        if (old.isNotEmpty() && old != stored) {
+            val u = Uri.parse(old)
+            if (u.scheme == "file") u.path?.let { File(it).delete() }
+            else runCatching {
+                getApplication<Application>().contentResolver.releasePersistableUriPermission(u, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        AppLog.i("LyricsBg", if (stored.isEmpty()) "removed" else "set, ${if (video) "video" else "image"}")
+    }
+
+    fun lyricsBgFailed() {
+        if (lyricsBg.isEmpty()) return
+        AppLog.w("LyricsBg", "couldn't load $lyricsBg, back to the normal background")
+        applyLyricsBg("", false, lyricsBg)
+        showNotice("Couldn't load the lyrics background")
     }
 
     fun loadLyrics() {
