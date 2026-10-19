@@ -147,6 +147,10 @@ fun NowPlaying(vm: MusicVM) {
     val bg = lerp(scheme.background, artColor, 0.85f)
     val grad = rememberArtGradient(meta?.artworkUri, scheme.surfaceContainerHigh)
     val text = Color.White
+    // floating window / split screen: less room, so fewer controls and smaller buttons
+    val tiny = isTinyWidth()
+    val short = isShortHeight()
+    val veryShort = isVeryShortHeight()
 
     LaunchedEffect(vm.playing) {
         while (true) {
@@ -208,7 +212,15 @@ fun NowPlaying(vm: MusicVM) {
                                 if (vm.playing) 1f else 0.86f,
                                 spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow), label = "artScale"
                             )
-                            Box(Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 56.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                            BoxWithConstraints(
+                                Modifier.fillMaxSize().padding(
+                                    start = if (tiny) 12.dp else 28.dp, end = if (tiny) 12.dp else 28.dp,
+                                    top = if (short) 48.dp else 56.dp, bottom = 8.dp
+                                ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // a square that fits both ways, so it also works in a short or narrow window
+                                val side = if (maxWidth < maxHeight) maxWidth else maxHeight
                                 AnimatedContent(
                                     targetState = meta?.artworkUri,
                                     transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
@@ -216,8 +228,7 @@ fun NowPlaying(vm: MusicVM) {
                                 ) { art ->
                                     PlayerArt(
                                         art?.toString(),
-                                        Modifier.fillMaxWidth()
-                                            .aspectRatio(1f)
+                                        Modifier.size(side)
                                             .graphicsLayer { scaleX = artScale; scaleY = artScale }
                                             .shadow(28.dp, RoundedCornerShape(20.dp))
                                             .clip(RoundedCornerShape(20.dp))
@@ -239,7 +250,7 @@ fun NowPlaying(vm: MusicVM) {
                 )
             }
 
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = if (tiny) 12.dp else 24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         AnimatedContent(
@@ -273,7 +284,7 @@ fun NowPlaying(vm: MusicVM) {
                             }
                         )
                     }
-                    RoundIcon(
+                    if (!tiny) RoundIcon(
                         R.drawable.playlist_add,
                         { vm.currentTrack()?.let { vm.openAddToPlaylist(it) } },
                         size = 48.dp, iconSize = 22.dp,
@@ -325,45 +336,47 @@ fun NowPlaying(vm: MusicVM) {
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
-                TimeRow(
+                if (!veryShort) TimeRow(
                     position = { drag?.let { (it * dur).toLong() } ?: pos },
                     duration = { dur },
                     format = id?.let { Extractor.formatOf(it) },
                     color = text
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(if (short) 2.dp else 8.dp))
 
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    androidx.compose.material3.IconButton(onClick = vm::previous, modifier = Modifier.size(76.dp)) {
-                        Icon(painterResource(R.drawable.skip_previous), null, tint = Color.White, modifier = Modifier.size(46.dp))
+                    androidx.compose.material3.IconButton(onClick = vm::previous, modifier = Modifier.size(if (short) 56.dp else 76.dp)) {
+                        Icon(painterResource(R.drawable.skip_previous), null, tint = Color.White, modifier = Modifier.size(if (short) 34.dp else 46.dp))
                     }
-                    androidx.compose.material3.IconButton(onClick = vm::toggle, modifier = Modifier.size(88.dp)) {
-                        Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, tint = Color.White, modifier = Modifier.size(68.dp))
+                    androidx.compose.material3.IconButton(onClick = vm::toggle, modifier = Modifier.size(if (short) 64.dp else 88.dp)) {
+                        Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, tint = Color.White, modifier = Modifier.size(if (short) 48.dp else 68.dp))
                     }
-                    androidx.compose.material3.IconButton(onClick = vm::next, modifier = Modifier.size(76.dp)) {
-                        Icon(painterResource(R.drawable.skip_next), null, tint = Color.White, modifier = Modifier.size(46.dp))
+                    androidx.compose.material3.IconButton(onClick = vm::next, modifier = Modifier.size(if (short) 56.dp else 76.dp)) {
+                        Icon(painterResource(R.drawable.skip_next), null, tint = Color.White, modifier = Modifier.size(if (short) 34.dp else 46.dp))
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
-                VolumeRow(text)
-                Spacer(Modifier.height(6.dp))
+                if (!short) {
+                    Spacer(Modifier.height(10.dp))
+                    VolumeRow(text)
+                    Spacer(Modifier.height(6.dp))
+                }
 
                 val offline = id != null && id in Downloads.ids
                 val dlProgress = id?.let { Downloads.active[it] }
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    Modifier.fillMaxWidth().padding(bottom = if (short) 6.dp else 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     run { PlayerToggle(R.drawable.queue_music, panel == 1) { panel = if (panel == 1) 0 else 1 } }
                     run { PlayerToggle(R.drawable.lyrics, panel == 2) { panel = if (panel == 2) 0 else 2 } }
-                    run { PlayerToggle(R.drawable.bedtime, vm.sleepMinutes > 0 || vm.sleepEndOfSong, if (vm.sleepMinutes > 0) "${vm.sleepMinutes}m" else null) { showSleep = true } }
+                    if (!tiny) run { PlayerToggle(R.drawable.bedtime, vm.sleepMinutes > 0 || vm.sleepEndOfSong, if (vm.sleepMinutes > 0) "${vm.sleepMinutes}m" else null) { showSleep = true } }
                     run { PlayerToggle(if (vm.shuffle) R.drawable.shuffle_on else R.drawable.shuffle, vm.shuffle) { vm.toggleShuffle() } }
                     run {
                         PlayerToggle(
@@ -375,8 +388,8 @@ fun NowPlaying(vm: MusicVM) {
                             vm.repeat != Player.REPEAT_MODE_OFF
                         ) { vm.cycleRepeat() }
                     }
-                    run { PlayerToggle(R.drawable.all_inclusive, vm.endless) { vm.setEndlessEnabled(!vm.endless) } }
-                    run {
+                    if (!tiny) run { PlayerToggle(R.drawable.all_inclusive, vm.endless) { vm.setEndlessEnabled(!vm.endless) } }
+                    if (!tiny) run {
                         PlayerToggle(
                             if (offline) R.drawable.offline else R.drawable.download,
                             offline,

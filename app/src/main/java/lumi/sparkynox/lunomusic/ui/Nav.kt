@@ -44,6 +44,7 @@ private val tabs = listOf(
 
 @Composable
 fun FloatingNav(tab: Int, proximity: Float, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val tiny = isTinyWidth()
     val shape = RoundedCornerShape(
         topStart = lerp(FloatingBarStandaloneCornerRadius.value, FloatingBarJunctionCornerRadius.value, proximity).dp,
         topEnd = lerp(FloatingBarStandaloneCornerRadius.value, FloatingBarJunctionCornerRadius.value, proximity).dp,
@@ -82,7 +83,7 @@ fun FloatingNav(tab: Int, proximity: Float, onSelect: (Int) -> Unit, modifier: M
                                         Icon(painterResource(if (sel) t.on else t.off), contentDescription = null)
                                     }
                                 },
-                                label = { Text(t.label, maxLines = 1) },
+                                label = { if (!tiny) Text(t.label, maxLines = 1) },
                             )
                         }
                     }

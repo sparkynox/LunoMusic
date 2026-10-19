@@ -158,7 +158,8 @@ fun MiniPlayer(vm: MusicVM, proximity: Float, modifier: Modifier = Modifier) {
                 IconButton(onClick = vm::toggle, modifier = Modifier.size(44.dp)) {
                     Icon(painterResource(if (vm.playing) R.drawable.pause else R.drawable.play), null, tint = scheme.onSurface, modifier = Modifier.size(28.dp))
                 }
-                IconButton(onClick = vm::next, modifier = Modifier.size(44.dp)) {
+                // swiping the bar still skips, the button makes way in a narrow window
+                if (!isTinyWidth()) IconButton(onClick = vm::next, modifier = Modifier.size(44.dp)) {
                     Icon(painterResource(R.drawable.skip_next), null, tint = scheme.onSurface, modifier = Modifier.size(26.dp))
                 }
             }

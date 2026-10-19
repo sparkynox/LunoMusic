@@ -14,6 +14,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -163,15 +164,21 @@ private fun HomeTab(vm: MusicVM) {
 
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = listPad) {
         item {
+            // in a small floating window the title and the stats button make way, stats is also in Settings
+            val tiny = isTinyWidth()
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+                Modifier.fillMaxWidth().padding(start = if (tiny) 8.dp else 16.dp, end = if (tiny) 8.dp else 12.dp, top = 12.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (tiny) 4.dp else 8.dp)
             ) {
-                Icon(painterResource(R.drawable.music_note), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-                Text("LunoMusic", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (tiny) {
+                    Spacer(Modifier.weight(1f))
+                } else {
+                    Icon(painterResource(R.drawable.music_note), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                    Text("LunoMusic", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                }
                 RoundIcon(R.drawable.history, { vm.openHistory() })
-                RoundIcon(R.drawable.stats, { vm.push(StatsPage) })
+                if (!tiny) RoundIcon(R.drawable.stats, { vm.push(StatsPage) })
                 RoundIcon(R.drawable.settings, { vm.push(SettingsPage) })
                 Avatar(
                     vm, 40.dp,
@@ -216,7 +223,7 @@ private fun HomeTab(vm: MusicVM) {
             }
         }
 
-        if (vm.homeLoading && vm.home.isEmpty()) item { androidx.compose.foundation.layout.Box(Modifier.fillParentMaxSize(0.7f).fillMaxWidth(), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 88.dp) } }
+        if (vm.homeLoading && vm.home.isEmpty()) item { androidx.compose.foundation.layout.Box(Modifier.fillParentMaxSize(0.7f).fillMaxWidth(), androidx.compose.ui.Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(strokeWidth = 3.dp) } }
         vm.error?.let {
             item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
         }
@@ -395,7 +402,7 @@ private fun LibraryTab(vm: MusicVM) {
             }
         }
 
-        if (vm.libLoading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 56.dp) } }
+        if (vm.libLoading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(strokeWidth = 3.dp) } }
         if (vm.libPlaylists.isNotEmpty()) {
             item { SectionHeader("Your playlists") }
             item {

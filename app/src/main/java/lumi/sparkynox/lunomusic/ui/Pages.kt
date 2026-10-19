@@ -159,7 +159,7 @@ private fun DetailScreen(vm: MusicVM, page: DetailPage) {
                 }
             }
         }
-        if (page.loading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 56.dp) } }
+        if (page.loading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(strokeWidth = 3.dp) } }
         page.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
         if (!page.loading && tracks.isEmpty() && page.error == null) {
             item { Text("Nothing here yet", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
@@ -189,7 +189,7 @@ private fun ArtistScreen(vm: MusicVM, page: ArtistPage) {
                 }
             }
         }
-        if (page.loading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { LmSpinner(size = 56.dp) } }
+        if (page.loading) item { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(24.dp), androidx.compose.ui.Alignment.Center) { androidx.compose.material3.CircularProgressIndicator(strokeWidth = 3.dp) } }
         page.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
 
         if (page.songs.isNotEmpty()) {

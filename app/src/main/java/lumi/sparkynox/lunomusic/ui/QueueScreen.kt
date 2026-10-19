@@ -66,6 +66,7 @@ private val RowHeight = 70.dp
 @Composable
 fun QueueScreen(vm: MusicVM) {
     val scheme = MaterialTheme.colorScheme
+    val tiny = isTinyWidth()
     val current = vm.queue.getOrNull(vm.queueIndex)
     val currentId = current?.mediaId
     val liked = currentId != null && currentId in vm.likedIds
@@ -92,7 +93,7 @@ fun QueueScreen(vm: MusicVM) {
     Column(Modifier.fillMaxSize()) {
         // current song
         Row(
-            Modifier.fillMaxWidth().padding(start = 72.dp, end = 8.dp, top = 14.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().padding(start = if (tiny) 56.dp else 72.dp, end = 8.dp, top = 14.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -110,20 +111,22 @@ fun QueueScreen(vm: MusicVM) {
                     style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
-            RoundIcon(
-                if (liked) R.drawable.favorite else R.drawable.favorite_border,
-                { currentId?.let { vm.toggleLike(it) } }, size = 40.dp, iconSize = 20.dp,
-                container = if (liked) scheme.primaryContainer else Color.White.copy(alpha = 0.14f),
-                tint = if (liked) scheme.onPrimaryContainer else Color.White
-            )
-            Box(Modifier.size(6.dp))
-            RoundIcon(
-                if (vm.queueLocked) R.drawable.lock else R.drawable.lock_open,
-                { vm.queueLocked = !vm.queueLocked }, size = 40.dp, iconSize = 20.dp,
-                container = if (vm.queueLocked) scheme.primaryContainer else Color.White.copy(alpha = 0.14f),
-                tint = if (vm.queueLocked) scheme.onPrimaryContainer else Color.White
-            )
-            Box(Modifier.size(6.dp))
+            if (!tiny) {
+                RoundIcon(
+                    if (liked) R.drawable.favorite else R.drawable.favorite_border,
+                    { currentId?.let { vm.toggleLike(it) } }, size = 40.dp, iconSize = 20.dp,
+                    container = if (liked) scheme.primaryContainer else Color.White.copy(alpha = 0.14f),
+                    tint = if (liked) scheme.onPrimaryContainer else Color.White
+                )
+                Box(Modifier.size(6.dp))
+                RoundIcon(
+                    if (vm.queueLocked) R.drawable.lock else R.drawable.lock_open,
+                    { vm.queueLocked = !vm.queueLocked }, size = 40.dp, iconSize = 20.dp,
+                    container = if (vm.queueLocked) scheme.primaryContainer else Color.White.copy(alpha = 0.14f),
+                    tint = if (vm.queueLocked) scheme.onPrimaryContainer else Color.White
+                )
+                Box(Modifier.size(6.dp))
+            }
             CurrentMenu(vm)
         }
 
@@ -241,8 +244,11 @@ private fun QueueAction(label: String, icon: Int, active: Boolean, modifier: Mod
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             val tint = if (active) scheme.onPrimaryContainer else Color.White
             Icon(painterResource(icon), null, tint = tint, modifier = Modifier.size(20.dp))
-            Box(Modifier.size(8.dp))
-            Text(label, color = tint, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            // icon only in a narrow window
+            if (!isTinyWidth()) {
+                Box(Modifier.size(8.dp))
+                Text(label, color = tint, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
         }
     }
 }
